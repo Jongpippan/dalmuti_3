@@ -1,77 +1,29 @@
-const crypto = require('crypto');
-const JESTER = 13;
-const RANK_NAMES = {1:'대 달무티',2:'대주교',3:'원수',4:'남작부인',5:'수도원장',6:'기사',7:'재봉사',8:'석공',9:'요리사',10:'양치기',11:'석공 노동자',12:'농노',13:'광대'};
-const VALID_DECK_MODES = new Set(['single','double']);
-const VALID_REMAINDER_MODES = new Set(['low','high','discard']);
-
+const crypto=require('crypto');
+const JESTER=13;
+const RANK_NAMES={1:'대 달무티',2:'대주교',3:'원수',4:'남작부인',5:'수도원장',6:'기사',7:'재봉사',8:'석공',9:'요리사',10:'양치기',11:'석공 노동자',12:'농노',13:'광대'};
+const VALID_REMAINDER_MODES=new Set(['low','high','discard']);
 function shuffle(a){const x=[...a];for(let i=x.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]]}return x}
-function normalizeRules(rules, playerCount){
-  const deckMode = playerCount < 9 ? 'single' : (VALID_DECK_MODES.has(rules?.deckMode) ? rules.deckMode : 'double');
-  const remainderMode = VALID_REMAINDER_MODES.has(rules?.remainderMode) ? rules.remainderMode : 'low';
-  return {deckMode,remainderMode};
-}
-function makeDeck(deckMode){
-  const a=[],copies=deckMode==='double'?2:1;
-  for(let copy=0;copy<copies;copy++){
-    for(let r=1;r<=12;r++)for(let i=0;i<r;i++)a.push({id:crypto.randomUUID(),rank:r});
-    a.push({id:crypto.randomUUID(),rank:JESTER},{id:crypto.randomUUID(),rank:JESTER});
-  }
-  return shuffle(a);
-}
-function revolutionJokerCount(rules){return rules.deckMode==='double'?3:2}
+function normalizeRules(rules){return{remainderMode:VALID_REMAINDER_MODES.has(rules?.remainderMode)?rules.remainderMode:'low'}}
+function makeDeck(){const a=[];for(let r=1;r<=12;r++)for(let i=0;i<r;i++)a.push({id:crypto.randomUUID(),rank:r});a.push({id:crypto.randomUUID(),rank:JESTER},{id:crypto.randomUUID(),rank:JESTER});return shuffle(a)}
 function sortHand(h){h.sort((a,b)=>a.rank-b.rank||a.id.localeCompare(b.id))}
 function roleName(i,n){if(i===0)return'대 달무티';if(i===1)return'소 달무티';if(i===n-2)return'소 농노';if(i===n-1)return'대 농노';return'상인'}
 function normalizeRoles(g){g.players.sort((a,b)=>a.roleIndex-b.roleIndex);g.players.forEach((p,i)=>{p.roleIndex=i;p.seat=i;p.role=roleName(i,g.players.length)})}
-function dealCards(g, deck){
-  const n=g.players.length,base=Math.floor(deck.length/n),remainder=deck.length%n;
-  const ordered=[...g.players].sort((a,b)=>a.roleIndex-b.roleIndex);
-  for(let round=0;round<base;round++)for(const p of ordered)p.hand.push(deck.pop());
-  let discarded=0;
-  if(g.rules.remainderMode==='discard'){
-    discarded=remainder;
-    for(let i=0;i<remainder;i++)deck.pop();
-  }else{
-    const extraOrder=g.rules.remainderMode==='low'?[...ordered].reverse():ordered;
-    for(let i=0;i<remainder;i++)extraOrder[i].hand.push(deck.pop());
-  }
-  return {base,remainder,discarded};
-}
-function createGame(lobbyPlayers,rules={}){
-  const players=shuffle(lobbyPlayers).map((p,i)=>({...p,seat:i,roleIndex:i,role:roleName(i,lobbyPlayers.length),hand:[],finished:false,finishPlace:null,connected:true}));
-  const g={status:'playing',handNumber:0,players,phase:'',currentPlayerId:null,pile:null,passers:[],lastPlayerId:null,finishOrder:[],logs:[],tax:{eligible:[],declined:[],stage:null,pending:null},winnerId:null,rules:normalizeRules(rules,players.length),deckSize:0,discardedCount:0,jokerNeed:2};
-  startHand(g,rules);
-  return g;
-}
-function startHand(g,rules=g.rules){
-  g.rules=normalizeRules(rules,g.players.length);
-  g.handNumber++;g.phase='deal';g.pile=null;g.passers=[];g.lastPlayerId=null;g.finishOrder=[];g.winnerId=null;
-  for(const p of g.players){p.hand=[];p.finished=false;p.finishPlace=null}
-  const d=makeDeck(g.rules.deckMode);g.deckSize=d.length;
-  const dealt=dealCards(g,d);g.discardedCount=dealt.discarded;
-  for(const p of g.players)sortHand(p.hand);
-  g.jokerNeed=revolutionJokerCount(g.rules);
-  const deckLabel=g.rules.deckMode==='double'?'두 덱 160장':'한 덱 80장';
-  const remainderLabel={low:'남는 카드는 낮은 계급부터 1장씩',high:'남는 카드는 높은 계급부터 1장씩',discard:'남는 카드는 버림'}[g.rules.remainderMode];
-  g.logs=[`${g.handNumber}번째 판이 시작되었습니다.`,`${deckLabel} · ${remainderLabel}.`];
-  if(dealt.discarded)g.logs.push(`균등 분배 후 남은 카드 ${dealt.discarded}장을 버렸습니다.`);
-  g.tax={eligible:[],declined:[],stage:null,pending:null};
-  if(g.handNumber===1){g.logs.push('첫 판은 세금 없이 시작합니다.');beginPlay(g);return}
-  const e=g.players.filter(p=>p.hand.filter(c=>c.rank===JESTER).length>=g.jokerNeed).map(p=>p.id);g.tax.eligible=e;
-  if(e.length){g.phase='revolution';g.currentPlayerId=null;g.logs.push(`광대 ${g.jokerNeed}장 이상 보유자는 혁명을 선언할 수 있습니다.`)}else beginTax(g)
-}
-function beginTax(g){const n=g.players.length;g.phase='tax';const gd=g.players.find(p=>p.roleIndex===0),ld=g.players.find(p=>p.roleIndex===1),lp=g.players.find(p=>p.roleIndex===n-2),gp=g.players.find(p=>p.roleIndex===n-1);g.tax.stage='greater-return';const given=takeBest(gp,2);gd.hand.push(...given);sortHand(gd.hand);g.tax.pending={fromId:gp.id,toId:gd.id,count:2,given:given.map(c=>c.id)};g.currentPlayerId=gd.id;g.logs.push(`${gp.name}이(가) 대 달무티에게 최고 카드 2장을 바쳤습니다.`)}
+function dealCards(g,deck){const ordered=[...g.players].sort((a,b)=>a.roleIndex-b.roleIndex),base=Math.floor(deck.length/ordered.length),remainder=deck.length%ordered.length;for(let round=0;round<base;round++)for(const p of ordered)p.hand.push(deck.pop());let discarded=0;if(g.rules.remainderMode==='discard'){discarded=remainder;for(let i=0;i<remainder;i++)deck.pop()}else{const extra=g.rules.remainderMode==='low'?[...ordered].reverse():ordered;for(let i=0;i<remainder;i++)extra[i].hand.push(deck.pop())}return{discarded,remainder}}
+function createGame(lobbyPlayers,rules={}){const players=shuffle(lobbyPlayers).map((p,i)=>({...p,seat:i,roleIndex:i,role:roleName(i,lobbyPlayers.length),hand:[],finished:false,finishPlace:null,connected:true}));const g={status:'playing',handNumber:0,players,phase:'',currentPlayerId:null,pile:null,passers:[],lastPlayerId:null,finishOrder:[],logs:[],tax:{eligible:[],declined:[],stage:null,pending:null},winnerId:null,rules:normalizeRules(rules),deckSize:80,discardedCount:0,jokerNeed:2};startHand(g,rules);return g}
+function startHand(g,rules=g.rules){g.rules=normalizeRules(rules);g.handNumber++;g.phase='deal';g.pile=null;g.passers=[];g.lastPlayerId=null;g.finishOrder=[];g.winnerId=null;for(const p of g.players){p.hand=[];p.finished=false;p.finishPlace=null}const dealt=dealCards(g,makeDeck());g.discardedCount=dealt.discarded;for(const p of g.players)sortHand(p.hand);const label={low:'남는 카드는 낮은 계급부터 1장씩',high:'남는 카드는 높은 계급부터 1장씩',discard:'남는 카드는 버림'}[g.rules.remainderMode];g.logs=[`${g.handNumber}번째 판이 시작되었습니다.`,`한 덱 80장 · ${label}.`];if(dealt.discarded)g.logs.push(`균등 분배 후 남은 카드 ${dealt.discarded}장을 버렸습니다.`);g.tax={eligible:[],declined:[],stage:null,pending:null};if(g.handNumber===1){g.logs.push('첫 판은 세금 없이 시작합니다.');beginPlay(g);return}const eligible=g.players.filter(p=>p.hand.filter(c=>c.rank===JESTER).length>=2).map(p=>p.id);g.tax.eligible=eligible;if(eligible.length){g.phase='revolution';g.currentPlayerId=null;g.logs.push('광대 2장 보유자는 혁명을 선언할 수 있습니다.')}else beginTax(g)}
+function beginTax(g){const n=g.players.length,gd=g.players.find(p=>p.roleIndex===0),ld=g.players.find(p=>p.roleIndex===1),lp=g.players.find(p=>p.roleIndex===n-2),gp=g.players.find(p=>p.roleIndex===n-1);g.phase='tax';g.tax.stage='greater-return';const given=takeBest(gp,2);gd.hand.push(...given);sortHand(gd.hand);g.tax.pending={fromId:gp.id,toId:gd.id,count:2,given:given.map(c=>c.id)};g.currentPlayerId=gd.id;g.logs.push(`${gp.name}이(가) 대 달무티에게 최고 카드 2장을 바쳤습니다.`)}
 function takeBest(p,n){sortHand(p.hand);return p.hand.splice(0,n)}
-function selectCards(p,ids,n){if(!Array.isArray(ids)||ids.length!==n||new Set(ids).size!==n)throw Error(`${n}장을 선택해 주세요.`);const c=ids.map(id=>p.hand.find(x=>x.id===id));if(c.some(x=>!x))throw Error('선택한 카드를 찾을 수 없습니다.');p.hand=p.hand.filter(x=>!ids.includes(x.id));return c}
+function selectCards(p,ids,n){if(!Array.isArray(ids)||ids.length!==n||new Set(ids).size!==n)throw Error(`${n}장을 선택해 주세요.`);const cards=ids.map(id=>p.hand.find(x=>x.id===id));if(cards.some(x=>!x))throw Error('선택한 카드를 찾을 수 없습니다.');p.hand=p.hand.filter(x=>!ids.includes(x.id));return cards}
 function taxReturn(g,id,ids){if(g.phase!=='tax'||g.currentPlayerId!==id)throw Error('지금은 세금 카드를 돌려줄 차례가 아닙니다.');const n=g.players.length,gd=g.players.find(p=>p.roleIndex===0),ld=g.players.find(p=>p.roleIndex===1),lp=g.players.find(p=>p.roleIndex===n-2),gp=g.players.find(p=>p.roleIndex===n-1);if(g.tax.stage==='greater-return'){gp.hand.push(...selectCards(gd,ids,2));sortHand(gp.hand);sortHand(gd.hand);const given=takeBest(lp,1);ld.hand.push(...given);sortHand(ld.hand);g.tax.stage='lesser-return';g.tax.pending={fromId:lp.id,toId:ld.id,count:1,given:given.map(c=>c.id)};g.currentPlayerId=ld.id}else{lp.hand.push(...selectCards(ld,ids,1));sortHand(lp.hand);sortHand(ld.hand);beginPlay(g)}}
 function declareRevolution(g,id,greater){if(g.phase!=='revolution'||!g.tax.eligible.includes(id))throw Error('혁명을 선언할 수 없습니다.');const p=g.players.find(x=>x.id===id),n=g.players.length;if(greater){if(p.roleIndex!==n-1)throw Error('대 농노만 대혁명을 선언할 수 있습니다.');for(const x of g.players)x.roleIndex=n-1-x.roleIndex;normalizeRoles(g);g.logs.push(`${p.name}이(가) 대혁명을 선언했습니다!`)}else g.logs.push(`${p.name}이(가) 혁명을 선언했습니다.`);beginPlay(g)}
 function declineRevolution(g,id){if(g.phase!=='revolution'||!g.tax.eligible.includes(id))throw Error('응답할 수 없습니다.');if(!g.tax.declined.includes(id))g.tax.declined.push(id);if(g.tax.declined.length===g.tax.eligible.length)beginTax(g)}
 function beginPlay(g){g.phase='play';g.pile=null;g.passers=[];g.lastPlayerId=null;const gd=g.players.find(p=>p.roleIndex===0);g.currentPlayerId=gd.id;g.logs.push(`${gd.name} 대 달무티가 첫 묶음을 냅니다.`)}
 function activePlayers(g){return g.players.filter(p=>!p.finished)}
-function nextActive(g,fromId){const o=[...g.players].sort((a,b)=>a.roleIndex-b.roleIndex),idx=o.findIndex(p=>p.id===fromId);for(let s=1;s<=o.length;s++){const p=o[(idx+s)%o.length];if(!p.finished)return p}return null}
+function nextActive(g,fromId){const ordered=[...g.players].sort((a,b)=>a.roleIndex-b.roleIndex),idx=ordered.findIndex(p=>p.id===fromId);for(let s=1;s<=ordered.length;s++){const p=ordered[(idx+s)%ordered.length];if(!p.finished)return p}return null}
 function effectivePlay(cards){const normal=cards.filter(c=>c.rank!==JESTER);if(!normal.length)return{rank:JESTER,count:cards.length};const rank=normal[0].rank;if(normal.some(c=>c.rank!==rank))throw Error('같은 숫자의 카드끼리만 낼 수 있습니다.');return{rank,count:cards.length}}
-function playCards(g,id,ids){if(g.phase!=='play'||g.currentPlayerId!==id)throw Error('내 차례가 아닙니다.');const p=g.players.find(x=>x.id===id);if(!Array.isArray(ids)||!ids.length||new Set(ids).size!==ids.length)throw Error('낼 카드를 선택해 주세요.');const cards=ids.map(x=>p.hand.find(c=>c.id===x));if(cards.some(c=>!c))throw Error('선택한 카드를 찾을 수 없습니다.');const play=effectivePlay(cards);if(g.pile){if(play.count!==g.pile.count)throw Error(`카드 ${g.pile.count}장을 내야 합니다.`);if(play.rank>=g.pile.rank)throw Error('더 높은 계급의 카드를 내야 합니다.')}p.hand=p.hand.filter(c=>!ids.includes(c.id));g.pile={rank:play.rank,count:play.count,playerId:p.id,cards:cards.map(c=>({rank:c.rank}))};g.lastPlayerId=p.id;g.passers=[];g.logs.push(`${p.name}이(가) ${RANK_NAMES[play.rank]} ${play.count}장을 냈습니다.`);if(p.hand.length===0){p.finished=true;p.finishPlace=g.finishOrder.length+1;g.finishOrder.push(p.id);if(activePlayers(g).length===1){finishHand(g);return}}if(play.rank===1){const leader=!p.finished?p:nextActive(g,p.id);g.logs.push(`대 달무티는 자동으로 선을 먹습니다. ${leader.name}이(가) 새 묶음을 시작합니다.`);g.pile=null;g.passers=[];g.lastPlayerId=null;g.currentPlayerId=leader.id;return}g.currentPlayerId=nextActive(g,p.id).id}
+function playCards(g,id,ids){if(g.phase!=='play'||g.currentPlayerId!==id)throw Error('내 차례가 아닙니다.');const p=g.players.find(x=>x.id===id);if(!Array.isArray(ids)||!ids.length||new Set(ids).size!==ids.length)throw Error('낼 카드를 선택해 주세요.');const cards=ids.map(x=>p.hand.find(c=>c.id===x));if(cards.some(c=>!c))throw Error('선택한 카드를 찾을 수 없습니다.');const play=effectivePlay(cards);if(g.pile){if(play.count!==g.pile.count)throw Error(`카드 ${g.pile.count}장을 내야 합니다.`);if(play.rank>=g.pile.rank)throw Error('더 높은 계급의 카드를 내야 합니다.')}p.hand=p.hand.filter(c=>!ids.includes(c.id));g.pile={rank:play.rank,count:play.count,playerId:p.id,cards:cards.map(c=>({rank:c.rank}))};g.lastPlayerId=p.id;g.passers=[];g.logs.push(`${p.name}이(가) ${RANK_NAMES[play.rank]} ${play.count}장을 냈습니다.`);if(!p.hand.length){p.finished=true;p.finishPlace=g.finishOrder.length+1;g.finishOrder.push(p.id);if(activePlayers(g).length===1){finishHand(g);return}}if(play.rank===1){const leader=!p.finished?p:nextActive(g,p.id);g.logs.push(`대 달무티는 자동으로 선을 먹습니다. ${leader.name}이(가) 새 묶음을 시작합니다.`);g.pile=null;g.passers=[];g.lastPlayerId=null;g.currentPlayerId=leader.id;return}g.currentPlayerId=nextActive(g,p.id).id}
 function pass(g,id){if(g.phase!=='play'||g.currentPlayerId!==id)throw Error('내 차례가 아닙니다.');if(!g.pile)throw Error('새 묶음에서는 패스할 수 없습니다.');if(!g.passers.includes(id))g.passers.push(id);const p=g.players.find(x=>x.id===id);g.logs.push(`${p.name}이(가) 패스했습니다.`);const last=g.players.find(x=>x.id===g.lastPlayerId),needed=activePlayers(g).filter(x=>x.id!==last?.id).map(x=>x.id);if(needed.every(x=>g.passers.includes(x))){const leader=last&&!last.finished?last:nextActive(g,last?.id||id);g.pile=null;g.passers=[];g.lastPlayerId=null;g.currentPlayerId=leader.id;g.logs.push(`묶음이 끝났습니다. ${leader.name}이(가) 새 묶음을 시작합니다.`)}else g.currentPlayerId=nextActive(g,id).id}
-function finishHand(g){const r=activePlayers(g)[0];r.finished=true;r.finishPlace=g.players.length;g.finishOrder.push(r.id);const o=g.finishOrder.map(id=>g.players.find(p=>p.id===id));o.forEach((p,i)=>p.roleIndex=i);normalizeRoles(g);g.phase='results';g.currentPlayerId=null;g.winnerId=o[0].id;g.logs.push(`${o[0].name}이(가) 새 대 달무티가 되었습니다.`)}
-function nextHand(g,id,rules=g.rules){if(g.phase!=='results')throw Error('현재 판이 끝나지 않았습니다.');const gd=g.players.find(p=>p.roleIndex===0);if(id!==gd.id)throw Error('새 대 달무티만 다음 판을 시작할 수 있습니다.');startHand(g,rules)}
+function finishHand(g){const last=activePlayers(g)[0];last.finished=true;last.finishPlace=g.players.length;g.finishOrder.push(last.id);const ordered=g.finishOrder.map(id=>g.players.find(p=>p.id===id)).filter(Boolean);ordered.forEach((p,i)=>p.roleIndex=i);normalizeRoles(g);g.phase='results';g.currentPlayerId=null;g.winnerId=ordered[0]?.id||null;if(ordered[0])g.logs.push(`${ordered[0].name}이(가) 새 대 달무티가 되었습니다.`)}
+function nextHand(g,id,rules=g.rules){if(g.phase!=='results')throw Error('현재 판이 끝나지 않았습니다.');const gd=g.players.find(p=>p.roleIndex===0);if(id!==gd?.id)throw Error('새 대 달무티만 다음 판을 시작할 수 있습니다.');startHand(g,rules)}
 function restartHand(g,rules=g.rules){startHand(g,rules)}
-module.exports={createGame,taxReturn,declareRevolution,declineRevolution,playCards,pass,nextHand,restartHand,normalizeRules,RANK_NAMES,JESTER};
+module.exports={createGame,taxReturn,declareRevolution,declineRevolution,playCards,pass,nextHand,restartHand,normalizeRules,normalizeRoles,RANK_NAMES,JESTER};
