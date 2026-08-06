@@ -12,11 +12,27 @@ $('#create').onclick=async()=>{session=null;if(await act('create-room',{name:$('
 $('#join').onclick=()=>joinCode($('#roomCode').value);
 $('#refreshRooms').onclick=loadRooms;
 $('#start').onclick=()=>act('start-game');$('#clear').onclick=()=>{selected.clear();render(state)};
-document.querySelectorAll('.leave').forEach(b=>b.onclick=async()=>{if(!confirm('방에서 나갈까요? 패가 남아 있으면 현재 판은 취소되고 남은 인원으로 새 판이 시작됩니다.'))return;if(await act('leave-room'))resetToHome()});
+function isUnfinishedPlayer(player){return !!player&&!player.finished&&player.handCount>0}
+function leaveConfirmMessage(){
+ const me=state?.game?.players.find(p=>p.id===state.viewerId);
+ if(isUnfinishedPlayer(me))return `아직 카드가 ${me.handCount}장 남아 있습니다.\n\n지금 나가면 현재 판이 취소되고, 본인을 제외한 인원으로 새 판이 시작됩니다. 정말 나갈까요?`;
+ if(me?.finished||me?.handCount===0)return '이미 패를 모두 냈습니다. 지금 나가도 현재 판은 그대로 진행되며 다음 판부터 제외됩니다. 나갈까요?';
+ return '방에서 나갈까요?';
+}
+document.querySelectorAll('.leave').forEach(b=>b.onclick=async()=>{if(!confirm(leaveConfirmMessage()))return;if(await act('leave-room'))resetToHome()});
 document.querySelectorAll('.chatSend').forEach(b=>b.onclick=()=>sendChat(b.parentElement.querySelector('.chatInput')));
 document.querySelectorAll('.chatInput').forEach(inp=>inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendChat(inp)}}));
 async function sendChat(inp){const message=inp.value.trim();if(!message)return;if(await act('send-chat',{message}))inp.value=''}
-async function kickPlayer(id,name){if(!confirm(`${name}님을 강퇴할까요? 현재 판 참가자라면 이 판을 취소하고 새 판을 시작합니다.`))return;await act('kick-player',{targetPlayerId:id})}
+async function kickPlayer(id,name){
+ const target=state?.game?.players.find(p=>p.id===id);
+ const message=isUnfinishedPlayer(target)
+  ?`${name}님은 아직 카드가 ${target.handCount}장 남아 있습니다.\n\n강퇴하면 현재 판이 취소되고, 해당 참가자를 제외한 인원으로 새 판이 시작됩니다. 정말 강퇴할까요?`
+  :target?.finished||target?.handCount===0
+   ?`${name}님은 이미 패를 모두 냈습니다. 강퇴해도 현재 판은 그대로 진행되고 다음 판부터 제외됩니다. 강퇴할까요?`
+   :`${name}님을 방에서 강퇴할까요?`;
+ if(!confirm(message))return;
+ await act('kick-player',{targetPlayerId:id})
+}
 function bindKickButtons(){document.querySelectorAll('[data-kick]').forEach(b=>b.onclick=()=>kickPlayer(b.dataset.kick,b.dataset.name))}
 function render(s){state=s;if(!s.room.started)lobby(s);else game(s);renderChat(s.room.chat||[])}
 function renderChat(items){const html=items.map(m=>`<div class="chatmsg"><b>${esc(m.name)}</b>${esc(m.text)}</div>`).join('');['#chatLobby','#chatGame'].forEach(sel=>{const el=$(sel);if(!el)return;const near=el.scrollHeight-el.scrollTop-el.clientHeight<35;el.innerHTML=html;if(near||!el.dataset.ready)el.scrollTop=el.scrollHeight;el.dataset.ready='1'})}
