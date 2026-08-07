@@ -1,4 +1,4 @@
-const $=s=>document.querySelector(s),screens=['home','lobby','game'];let session=null,state=null,source=null,selected=new Set();
+const $=s=>document.querySelector(s),screens=['home','lobby','game'];let session=null,state=null,source=null,selected=new Set(),audioCtx=null;
 const names={1:'대 달무티',2:'대주교',3:'원수',4:'남작부인',5:'수도원장',6:'기사',7:'재봉사',8:'석공',9:'요리사',10:'양치기',11:'석공 노동자',12:'농노',13:'광대'};
 const ruleLabels={low:'낮은 계급부터 1장씩',high:'높은 계급부터 1장씩',discard:'남는 카드 버리기'};
 function show(id){screens.forEach(x=>$('#'+x).classList.toggle('hidden',x!==id));if(id==='home')loadRooms()}
@@ -6,6 +6,13 @@ function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');se
 async function act(type,data={}){try{const payload={type,...(session||{}),...data},r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}),j=await r.json();if(!j.ok)throw Error(j.error);if(j.session){session=j.session;localStorage.setItem('dalmuti-session',JSON.stringify(session))}if(j.state)render(j.state);return true}catch(e){toast(e.message);return false}}
 function resetToHome(message){if(source)source.close();source=null;session=null;state=null;selected.clear();localStorage.removeItem('dalmuti-session');show('home');if(message)toast(message)}
 function connect(){if(source)source.close();const q=new URLSearchParams(session);source=new EventSource('/api/events?'+q);source.addEventListener('state',e=>render(JSON.parse(e.data)));source.addEventListener('kicked',e=>{let m='방장에 의해 강퇴되었습니다.';try{m=JSON.parse(e.data).message||m}catch{}resetToHome(m)});source.onerror=()=>{}}
+function unlockAudio(){try{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume()}catch{}}
+document.addEventListener('pointerdown',unlockAudio,{capture:true});document.addEventListener('keydown',unlockAudio,{capture:true});
+function osc(freq,start,dur,gain=.07,type='sine',endFreq=null){if(!audioCtx||audioCtx.state!=='running')return;const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime+start;o.type=type;o.frequency.setValueAtTime(freq,t);if(endFreq)o.frequency.exponentialRampToValueAtTime(endFreq,t+dur);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(gain,t+.012);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g).connect(audioCtx.destination);o.start(t);o.stop(t+dur+.02)}
+function noise(start,dur,gain=.08){if(!audioCtx||audioCtx.state!=='running')return;const len=Math.max(1,Math.floor(audioCtx.sampleRate*dur)),b=audioCtx.createBuffer(1,len,audioCtx.sampleRate),d=b.getChannelData(0);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(1-i/len);const s=audioCtx.createBufferSource(),g=audioCtx.createGain(),t=audioCtx.currentTime+start;s.buffer=b;g.gain.setValueAtTime(gain,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);s.connect(g).connect(audioCtx.destination);s.start(t)}
+function playSfx(type,delay=0){if(!audioCtx||audioCtx.state!=='running')return;if(type==='card'){noise(delay,.09,.09);osc(180,delay,.11,.055,'triangle',95)}else if(type==='pile'){osc(330,delay,.13,.055,'triangle');osc(247,delay+.10,.16,.05,'triangle');osc(165,delay+.21,.23,.055,'triangle')}else if(type==='finish'){osc(523,delay,.14,.055,'sine');osc(659,delay+.09,.16,.06,'sine');osc(784,delay+.18,.28,.07,'sine')}else if(type==='dalmuti'){noise(delay,.18,.055);osc(110,delay,.55,.08,'sawtooth',82);osc(220,delay+.04,.50,.055,'triangle',165);osc(330,delay+.08,.48,.045,'triangle',247);osc(440,delay+.15,.42,.04,'sine',330)}}
+function addedLogs(prev,next){if(!prev?.game||!next?.game||prev.game.handNumber!==next.game.handNumber)return[];const a=prev.game.logs||[],b=next.game.logs||[];let overlap=Math.min(a.length,b.length);outer:for(;overlap>=0;overlap--){for(let i=0;i<overlap;i++)if(a[a.length-overlap+i]!==b[i])continue outer;break}return b.slice(overlap)}
+function playLogSounds(prev,next){const logs=addedLogs(prev,next);let delay=0;for(const line of logs){let type=null;if(line.includes('카드를 모두 냈습니다!'))type='finish';else if(line.includes('대 달무티는 자동으로 선을 먹습니다.'))type='dalmuti';else if(line.includes('묶음이 끝났습니다.'))type='pile';else if(/이\(가\).*\d+장을 냈습니다\.$/.test(line))type='card';if(type){playSfx(type,delay);delay+=type==='dalmuti'?.34:.12}}}
 async function joinCode(code){const name=$('#name').value.trim();if(!name){toast('닉네임을 입력해 주세요.');$('#name').focus();return}session=null;$('#roomCode').value=code;if(await act('join-room',{name,roomCode:code}))connect()}
 async function loadRooms(){try{const r=await fetch('/api/rooms',{cache:'no-store'}),j=await r.json();if(!j.ok)throw Error();const box=$('#roomList');if(!box)return;if(!j.rooms.length){box.innerHTML='<div class="emptyRooms">현재 열린 방이 없습니다.</div>';return}box.innerHTML=j.rooms.map(x=>`<div class="roomItem"><div><strong>${esc(x.code)}</strong><span>${x.count} / ${x.maxPlayers}명 · ${x.started?'게임 중':'대기 중'}</span></div><button class="tiny" data-room="${x.code}" ${x.joinable?'':'disabled'}>${x.joinable?'참가':'가득 참'}</button></div>`).join('');box.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>joinCode(b.dataset.room))}catch{const box=$('#roomList');if(box)box.innerHTML='<div class="emptyRooms">방 목록을 불러오지 못했습니다.</div>'}}
 $('#create').onclick=async()=>{session=null;if(await act('create-room',{name:$('#name').value}))connect()};
@@ -13,28 +20,14 @@ $('#join').onclick=()=>joinCode($('#roomCode').value);
 $('#refreshRooms').onclick=loadRooms;
 $('#start').onclick=()=>act('start-game');$('#clear').onclick=()=>{selected.clear();render(state)};
 function isUnfinishedPlayer(player){return !!player&&!player.finished&&player.handCount>0}
-function leaveConfirmMessage(){
- const me=state?.game?.players.find(p=>p.id===state.viewerId);
- if(isUnfinishedPlayer(me))return `아직 카드가 ${me.handCount}장 남아 있습니다.\n\n지금 나가면 현재 판이 취소되고, 본인을 제외한 인원으로 새 판이 시작됩니다. 정말 나갈까요?`;
- if(me?.finished||me?.handCount===0)return '이미 패를 모두 냈습니다. 지금 나가도 현재 판은 그대로 진행되며 다음 판부터 제외됩니다. 나갈까요?';
- return '방에서 나갈까요?';
-}
+function leaveConfirmMessage(){const me=state?.game?.players.find(p=>p.id===state.viewerId);if(isUnfinishedPlayer(me))return `아직 카드가 ${me.handCount}장 남아 있습니다.\n\n지금 나가면 현재 판이 취소되고, 본인을 제외한 인원으로 새 판이 시작됩니다. 정말 나갈까요?`;if(me?.finished||me?.handCount===0)return '이미 패를 모두 냈습니다. 지금 나가도 현재 판은 그대로 진행되며 다음 판부터 제외됩니다. 나갈까요?';return '방에서 나갈까요?'}
 document.querySelectorAll('.leave').forEach(b=>b.onclick=async()=>{if(!confirm(leaveConfirmMessage()))return;if(await act('leave-room'))resetToHome()});
 document.querySelectorAll('.chatSend').forEach(b=>b.onclick=()=>sendChat(b.parentElement.querySelector('.chatInput')));
 document.querySelectorAll('.chatInput').forEach(inp=>inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendChat(inp)}}));
 async function sendChat(inp){const message=inp.value.trim();if(!message)return;if(await act('send-chat',{message}))inp.value=''}
-async function kickPlayer(id,name){
- const target=state?.game?.players.find(p=>p.id===id);
- const message=isUnfinishedPlayer(target)
-  ?`${name}님은 아직 카드가 ${target.handCount}장 남아 있습니다.\n\n강퇴하면 현재 판이 취소되고, 해당 참가자를 제외한 인원으로 새 판이 시작됩니다. 정말 강퇴할까요?`
-  :target?.finished||target?.handCount===0
-   ?`${name}님은 이미 패를 모두 냈습니다. 강퇴해도 현재 판은 그대로 진행되고 다음 판부터 제외됩니다. 강퇴할까요?`
-   :`${name}님을 방에서 강퇴할까요?`;
- if(!confirm(message))return;
- await act('kick-player',{targetPlayerId:id})
-}
+async function kickPlayer(id,name){const target=state?.game?.players.find(p=>p.id===id);const message=isUnfinishedPlayer(target)?`${name}님은 아직 카드가 ${target.handCount}장 남아 있습니다.\n\n강퇴하면 현재 판이 취소되고, 해당 참가자를 제외한 인원으로 새 판이 시작됩니다. 정말 강퇴할까요?`:target?.finished||target?.handCount===0?`${name}님은 이미 패를 모두 냈습니다. 강퇴해도 현재 판은 그대로 진행되고 다음 판부터 제외됩니다. 강퇴할까요?`:`${name}님을 방에서 강퇴할까요?`;if(!confirm(message))return;await act('kick-player',{targetPlayerId:id})}
 function bindKickButtons(){document.querySelectorAll('[data-kick]').forEach(b=>b.onclick=()=>kickPlayer(b.dataset.kick,b.dataset.name))}
-function render(s){state=s;if(!s.room.started)lobby(s);else game(s);renderChat(s.room.chat||[])}
+function render(s){playLogSounds(state,s);state=s;if(!s.room.started)lobby(s);else game(s);renderChat(s.room.chat||[])}
 function renderChat(items){const html=items.map(m=>`<div class="chatmsg"><b>${esc(m.name)}</b>${esc(m.text)}</div>`).join('');['#chatLobby','#chatGame'].forEach(sel=>{const el=$(sel);if(!el)return;const near=el.scrollHeight-el.scrollTop-el.clientHeight<35;el.innerHTML=html;if(near||!el.dataset.ready)el.scrollTop=el.scrollHeight;el.dataset.ready='1'})}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function rulePanel(s,where){const host=s.viewerId===s.room.hostId,dalmuti=s.viewerId===s.room.dalmutiId,canEdit=where==='lobby'?host:dalmuti,next=s.room.rules,current=s.game?.rules;return `<div class="ruleSummary"><strong>${current?`현재 판: 한 덱 80장 · ${ruleLabels[current.remainderMode]}`:'한 덱 80장'}</strong><small>남는 카드 분배 방식은 ${where==='lobby'?'방장':'현재 대 달무티'}이 정합니다.</small></div><label>남는 카드 분배<select class="remainderRule" ${canEdit?'':'disabled'}><option value="low" ${next.remainderMode==='low'?'selected':''}>낮은 계급부터 1장씩</option><option value="high" ${next.remainderMode==='high'?'selected':''}>높은 계급부터 1장씩</option><option value="discard" ${next.remainderMode==='discard'?'selected':''}>남는 카드 버리기</option></select></label>`}
