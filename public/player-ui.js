@@ -1,47 +1,16 @@
 (()=>{
 const TITLES=['달무티','총리대신','시종장','남작부인','수녀원장','기사','재봉사','석공','요리사','양치기','광부','농노','광대'];
-const PORTRAITS={royal:'👑',mage:'🧙',knight:'🛡️',princess:'👸',ninja:'🥷',bard:'🎸',fox:'🦊',owl:'🦉'};
+const PORTRAITS={royal:'🤴',mage:'🧙‍♂️',knight:'🧔‍♂️',princess:'👩‍🦰',ninja:'🥷',bard:'👨‍🎤',fox:'👩‍🦱',owl:'👨‍🦳'};
 const $all=s=>[...document.querySelectorAll(s)];
 function rankFromCard(card){const t=card.querySelector('.num')?.textContent?.trim();return t==='★'?13:Number(t)||0}
 function miniHand(count){if(!count)return'';const cards=Array.from({length:count},(_,i)=>`<i style="--i:${i}"></i>`).join('');return `<span class="miniCards" aria-label="남은 카드 ${count}장" style="--count:${count}">${cards}</span>`}
 function roomByName(){const m=new Map();try{for(const p of state?.room?.players||[])m.set(p.name,p)}catch{}return m}
-function playerInfo(){
- const map=new Map(),active=$all('#players .player:not(.waiting)'),room=roomByName();
- active.forEach((p,i)=>{
-  const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);
-  if(name)map.set(name,{title:TITLES[i]||`${i+1}위`,rank:i+1,lowest:i===active.length-1,portrait:rp?.portrait||'royal',resting:!!rp?.resting,roundResting:!!rp?.roundResting});
- });
- return map
-}
+function playerInfo(){const map=new Map(),active=$all('#players .player:not(.waiting)'),room=roomByName();active.forEach((p,i)=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);if(name)map.set(name,{title:TITLES[i]||`${i+1}위`,rank:i+1,lowest:i===active.length-1,portrait:rp?.portrait||'royal',resting:!!rp?.resting,roundResting:!!rp?.roundResting})});return map}
 function avatarHtml(id,extra=''){return `<span class="avatar ${extra}" aria-hidden="true">${PORTRAITS[id]||PORTRAITS.royal}</span>`}
-function applyChat(){
- const info=playerInfo();
- $all('.chatmsg').forEach(msg=>{
-  const b=msg.querySelector('b');if(!b)return;
-  const name=b.textContent.trim(),p=info.get(name);
-  if(!msg.dataset.rawText){const clone=msg.cloneNode(true);clone.querySelector('b')?.remove();clone.querySelector('.chatRank')?.remove();clone.querySelector('.avatar')?.remove();msg.dataset.rawText=clone.textContent.trim()}
-  if(!p)return;
-  const raw=msg.dataset.rawText||'';
-  msg.classList.toggle('lowestChat',p.lowest);
-  msg.innerHTML=`${avatarHtml(p.portrait)}<span class="chatText"><b>${escapeHtml(name)}</b><span class="chatRank">${escapeHtml(p.title)} · ${p.rank}위</span> ${p.lowest?'피카!':escapeHtml(raw)}</span>`;
- })
-}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function applyPlayers(){
- const room=roomByName(),active=$all('#players .player:not(.waiting)');
- active.forEach((p,i)=>{
-  const role=p.querySelector('.role'),name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);
-  if(role)role.textContent=TITLES[i]||`${i+1}위`;
-  const meta=p.querySelector('.pmeta');
-  if(meta&&!meta.querySelector('.miniCards')){const m=meta.textContent.match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}
-  if(rp&&!p.querySelector('.playerAvatar')){p.classList.add('hasAvatar');p.insertAdjacentHTML('afterbegin',avatarHtml(rp.portrait,'playerAvatar'))}
-  p.querySelector('.playerRest')?.remove();
-  if(rp?.resting||rp?.roundResting){const s=document.createElement('span');s.className='playerRest';s.textContent=rp.resting?' · 쉬는 중':' · 이번 라운드 쉼';meta?.appendChild(s)}
- });
- const waiting=$all('#players .player.waiting');waiting.forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);if(rp&&!p.querySelector('.playerAvatar')){p.classList.add('hasAvatar');p.insertAdjacentHTML('afterbegin',avatarHtml(rp.portrait,'playerAvatar'))}})
-}
+function applyChat(){const info=playerInfo();$all('.chatmsg').forEach(msg=>{const b=msg.querySelector('b');if(!b)return;const name=b.textContent.trim(),p=info.get(name);if(!msg.dataset.rawText){const clone=msg.cloneNode(true);clone.querySelector('b')?.remove();clone.querySelector('.chatRank')?.remove();clone.querySelector('.avatar')?.remove();msg.dataset.rawText=clone.textContent.trim()}if(!p)return;const raw=msg.dataset.rawText||'';msg.classList.toggle('lowestChat',p.lowest);msg.innerHTML=`${avatarHtml(p.portrait)}<span class="chatText"><b>${escapeHtml(name)}</b><span class="chatRank">${escapeHtml(p.title)} · ${p.rank}위</span> ${escapeHtml(raw)}</span>`})}
+function applyPlayers(){const room=roomByName(),active=$all('#players .player:not(.waiting)');active.forEach((p,i)=>{const role=p.querySelector('.role'),name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);if(role)role.textContent=TITLES[i]||`${i+1}위`;const meta=p.querySelector('.pmeta');if(meta&&!meta.querySelector('.miniCards')){const m=meta.textContent.match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}if(rp&&!p.querySelector('.playerAvatar')){p.classList.add('hasAvatar');p.insertAdjacentHTML('afterbegin',avatarHtml(rp.portrait,'playerAvatar'))}p.querySelector('.playerRest')?.remove();if(rp?.resting||rp?.roundResting){const s=document.createElement('span');s.className='playerRest';s.textContent=rp.resting?' · 쉬는 중':' · 이번 라운드 쉼';meta?.appendChild(s)}});$all('#players .player.waiting').forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);if(rp&&!p.querySelector('.playerAvatar')){p.classList.add('hasAvatar');p.insertAdjacentHTML('afterbegin',avatarHtml(rp.portrait,'playerAvatar'))}})}
 function apply(){applyPlayers();$all('.card').forEach(card=>{const rank=rankFromCard(card),name=card.querySelector('.name');if(name&&TITLES[rank-1])name.textContent=TITLES[rank-1]});applyChat()}
 let queued=false;function schedule(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;apply()})}
-new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});
-document.addEventListener('DOMContentLoaded',apply);apply();
+new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});document.addEventListener('DOMContentLoaded',apply);apply();
 })();
