@@ -1,0 +1,6 @@
+(()=>{
+function ensureBox(){let box=document.querySelector('#restControls');if(!box){box=document.createElement('div');box.id='restControls';box.className='restControls hidden';document.querySelector('#game')?.appendChild(box)}return box}
+function renderRest(){const box=ensureBox();if(!box)return;let s=null;try{s=state}catch{}const me=s?.room?.players?.find(p=>p.id===s.viewerId),gp=s?.game?.players?.find(p=>p.id===s.viewerId);if(!s?.game||!me||!gp||gp.finished||s.game.phase!=='play'){box.classList.add('hidden');box.innerHTML='';return}box.classList.remove('hidden');box.innerHTML=`<button data-rest-round ${me.roundResting?'disabled class="resting"':''}>${me.roundResting?'이번 라운드 쉬는 중':'이번 라운드 쉬기'}</button><button data-rest-toggle class="${me.resting?'resting':''}">${me.resting?'복귀':'쉬기'}</button>`;const rr=box.querySelector('[data-rest-round]'),rt=box.querySelector('[data-rest-toggle]');if(rr&&!rr.disabled)rr.onclick=()=>act('rest-round');if(rt)rt.onclick=()=>act('toggle-rest',{resting:!me.resting})}
+let q=false;function schedule(){if(q)return;q=true;requestAnimationFrame(()=>{q=false;renderRest()})}
+new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});document.addEventListener('DOMContentLoaded',renderRest);renderRest();
+})();
