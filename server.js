@@ -5,6 +5,7 @@ const PORTRAITS=new Set(['royal','mage','knight','princess','ninja','bard','fox'
 const MIME={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 function cleanName(v){const s=String(v||'').replace(/\s+/g,' ').trim().slice(0,14);if(!s)throw Error('닉네임을 입력해 주세요.');return s}
 function cleanMessage(v){const s=String(v||'').replace(/\s+/g,' ').trim().slice(0,120);if(!s)throw Error('메시지를 입력해 주세요.');return s}
+function pikaMask(v){const chars=[...String(v).replace(/\s/g,'')].length,repeats=Math.max(1,Math.ceil(chars/2));return Array.from({length:repeats},()=> '피카').join(' ')+'!'}
 function cleanPortrait(v){const s=String(v||'royal');return PORTRAITS.has(s)?s:'royal'}
 function cleanCode(v){return String(v||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,6)}
 function newCode(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';for(let z=0;z<999;z++){let s='';for(let i=0;i<5;i++)s+=chars[Math.floor(Math.random()*chars.length)];if(!rooms.has(s))return s}throw Error('방 코드를 만들지 못했습니다.')}
@@ -55,7 +56,7 @@ const A={
 'rest-round':p=>{const{r,u}=auth(p),g=r.game,gp=g?.players.find(x=>x.id===u.id);if(!g||g.phase!=='play'||!gp||gp.finished)throw Error('지금은 이번 라운드 쉬기를 사용할 수 없습니다.');u.roundRestHand=g.handNumber;u.roundRestNumber=g.roundNumber;r.chat.push({id:crypto.randomUUID(),playerId:'system',name:'시스템',text:`${u.name}님이 이번 라운드를 쉽니다.`,at:Date.now()});afterAction(r);return{}},
 'toggle-rest':p=>{const{r,u}=auth(p);u.resting=!!p.resting;if(!u.resting){u.roundRestHand=null;u.roundRestNumber=null}r.chat.push({id:crypto.randomUUID(),playerId:'system',name:'시스템',text:u.resting?`${u.name}님이 쉬기 상태로 전환했습니다.`:`${u.name}님이 게임에 복귀했습니다.`,at:Date.now()});afterAction(r);return{}},
 'next-hand':p=>{const{r,u}=auth(p),g=r.game;if(g.phase!=='results')throw Error('현재 판이 끝나지 않았습니다.');pruneDepartedPlayers(r);const newcomers=addWaitingPlayersForNextHand(r);if(g.players.length<MIN_PLAYERS){r.game=null;afterAction(r);return{}}const gd=g.players.find(x=>x.roleIndex===0);if(u.id!==gd?.id)throw Error('새 대 달무티만 다음 판을 시작할 수 있습니다.');if(newcomers.length)g.logs.push(`${newcomers.map(x=>x.name).join(', ')}님이 새 대농노 계급으로 합류합니다.`);E.nextHand(g,u.id,r.rules);afterAction(r);return{}},
-'send-chat':p=>{const{r,u}=auth(p),lowest=r.game?[...r.game.players].sort((a,b)=>b.roleIndex-a.roleIndex)[0]?.id:null,text=lowest===u.id?'피카!':cleanMessage(p.message);r.chat.push({id:crypto.randomUUID(),playerId:u.id,name:u.name,text,masked:lowest===u.id,at:Date.now()});if(r.chat.length>80)r.chat.splice(0,r.chat.length-80);afterAction(r);return{}}
+'send-chat':p=>{const{r,u}=auth(p),raw=cleanMessage(p.message),lowest=r.game?[...r.game.players].sort((a,b)=>b.roleIndex-a.roleIndex)[0]?.id:null,text=lowest===u.id?pikaMask(raw):raw;r.chat.push({id:crypto.randomUUID(),playerId:u.id,name:u.name,text,masked:lowest===u.id,at:Date.now()});if(r.chat.length>80)r.chat.splice(0,r.chat.length-80);afterAction(r);return{}}
 };
 function json(res,status,obj){const b=JSON.stringify(obj);res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Content-Length':Buffer.byteLength(b)});res.end(b)}
 function body(req){return new Promise((ok,no)=>{let s='';req.on('data',d=>{s+=d;if(s.length>1e6)req.destroy()});req.on('end',()=>{try{ok(s?JSON.parse(s):{})}catch(e){no(e)}});req.on('error',no)})}
