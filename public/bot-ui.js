@@ -1,0 +1,8 @@
+(()=>{
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function controlsHtml(s){if(!s||s.viewerId!==s.room.hostId)return'';const bots=s.room.players.filter(p=>p.bot),canAdd=s.room.players.length<s.room.maxPlayers;return `<div class="botControlHead"><span>봇 ${bots.length}명</span><button class="tiny" data-bot-add ${canAdd?'':'disabled'}>+ 봇 추가</button></div>${bots.length?`<div class="botChips">${bots.map(b=>`<span>${esc(b.name)}${b.waiting?' · 다음 판':''}<button class="botRemove" data-bot-remove="${b.id}" aria-label="${esc(b.name)} 제거">×</button></span>`).join('')}</div>`:'<small>사람이 부족하면 봇을 추가할 수 있습니다.</small>'}`}
+function bind(root){root.querySelector('[data-bot-add]')?.addEventListener('click',()=>act('add-bot'));root.querySelectorAll('[data-bot-remove]').forEach(b=>b.addEventListener('click',async()=>{const p=state?.room?.players.find(x=>x.id===b.dataset.botRemove);if(!p)return;if(!confirm(`${p.name}을 제거할까요?${state?.game?.players.some(x=>x.id===p.id)&&!state.game.players.find(x=>x.id===p.id)?.finished?'\n현재 판 참가 중이면 판이 새로 시작됩니다.':''}`))return;await act('remove-bot',{botId:p.id})}))}
+function render(){if(typeof state==='undefined'||!state)return;for(const id of ['#lobbyBotControls','#gameBotControls']){const root=document.querySelector(id);if(!root)continue;root.innerHTML=controlsHtml(state);root.classList.toggle('hidden',!root.innerHTML);bind(root)}}
+let q=false;function schedule(){if(q)return;q=true;requestAnimationFrame(()=>{q=false;render()})}
+new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true});document.addEventListener('DOMContentLoaded',render);render();
+})();
