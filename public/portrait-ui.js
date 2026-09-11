@@ -1,5 +1,5 @@
 (()=>{
-const PORTRAITS=[['royal','👑','왕실'],['mage','🧙','마법사'],['knight','🛡️','기사'],['princess','👸','귀족'],['ninja','🥷','암행'],['bard','🎸','악사'],['fox','🦊','여우'],['owl','🦉','부엉이']];
+const PORTRAITS=[['royal','🤴','젊은 군주'],['mage','🧙‍♂️','마법사'],['knight','🧔‍♂️','기사'],['princess','👩‍🦰','귀족 여성'],['ninja','🥷','암행자'],['bard','👨‍🎤','악사'],['fox','👩‍🦱','여행자'],['owl','👨‍🦳','원로']];
 let current=localStorage.getItem('dalmuti-portrait')||'royal';
 if(!PORTRAITS.some(([id])=>id===current))current='royal';
 window.getDalmutiPortrait=()=>current;
