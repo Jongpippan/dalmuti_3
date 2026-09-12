@@ -15,8 +15,11 @@ function layout(){
  const freq={};for(const c of cs){const r=rankOf(c);freq[r]=(freq[r]||0)+1}
  cs.sort((a,b)=>{const ra=rankOf(a),rb=rankOf(b);return sortMode==='count'?(freq[rb]-freq[ra]||ra-rb):(ra-rb)});
  const current=cards();if(cs.some((c,i)=>current[i]!==c))for(const c of cs)hand.appendChild(c);
- const n=cs.length,viewport=Math.max(300,window.innerWidth),span=Math.min(560,viewport*.78),step=n>1?Math.min(44,span/(n-1)):0,maxAngle=Math.min(26,Math.max(8,n*2.1)),den=Math.max(1,(n-1)/2);
- cs.forEach((c,i)=>{const d=i-(n-1)/2,x=d*step,r=d/den*maxAngle,y=Math.abs(r)*.72;c.style.setProperty('--fan-x',`${x}px`);c.style.setProperty('--fan-y',`${y}px`);c.style.setProperty('--fan-r',`${r}deg`);c.style.zIndex=String(i+2)});
+ const compact=window.innerWidth<=540,cardW=compact?48:58,sameStep=compact?16:18,groupGap=compact?12:16;
+ const xs=[];let x=0,prev=null;
+ cs.forEach((c,i)=>{const r=rankOf(c);if(i>0)x+=r===prev?sameStep:cardW+groupGap;xs.push(x);prev=r});
+ const total=(xs.at(-1)||0)+cardW,offset=total/2-cardW/2;
+ cs.forEach((c,i)=>{c.style.setProperty('--fan-x',`${xs[i]-offset}px`);c.style.setProperty('--fan-y','0px');c.style.setProperty('--fan-r','0deg');c.style.zIndex=String(i+2)});
  const play=$('#actions [data-a="play"]');if(play)play.textContent='제출';
  lastSignature=sig;setSortButtons();
  if(sameHand)requestAnimationFrame(()=>hand.classList.remove('noFanTransition'))
