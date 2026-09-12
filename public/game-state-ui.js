@@ -1,14 +1,19 @@
 (()=>{
 let q=false,lastDalmutiKey='',lastHandIds=new Set(),lastTaxHand=0;
 function playerName(g,id){return g.players?.find(p=>p.id===id)?.name||''}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function taxText(g,s,cur){
- const p=g.tax?.pending,stage=g.tax?.stage||'',count=p?.count||(stage.startsWith('greater')?2:1),side=p?.side||(stage.includes('-lower-')?'lower':'upper'),upper=playerName(g,p?.upperId),lower=playerName(g,p?.lowerId);
- if(g.currentPlayerId===s.viewerId){
-  const partner=side==='lower'?upper:lower;
-  return `세금 교환 · ${partner||'상대'}와 교환할 카드 ${count}장을 내 패에서 선택하세요. 상대가 고른 카드는 아직 들어오지 않습니다.`
- }
- if(side==='lower')return `세금 교환 · ${cur?.name||lower||'하위 플레이어'}이(가) 교환할 카드 ${count}장을 고르는 중입니다.`;
- return `세금 교환 · 하위 플레이어의 선택 완료. ${cur?.name||upper||'상위 플레이어'}이(가) 교환할 카드 ${count}장을 고르는 중입니다.`
+ const p=g.tax?.pending,count=p?.count||1,upper=playerName(g,p?.upperId),lower=playerName(g,p?.lowerId);
+ if(g.currentPlayerId===s.viewerId)return `세금 교환 · ${lower||'하위 플레이어'}의 광대를 제외한 최고 카드 ${count}장은 자동으로 정해졌습니다. 내 패에서 교환할 카드 ${count}장을 선택하세요.`;
+ return `세금 교환 · ${lower||'하위 플레이어'}의 최고 카드 ${count}장은 자동 선택되었습니다. ${cur?.name||upper||'상위 플레이어'}이(가) 교환할 카드 ${count}장을 고르는 중입니다.`
+}
+function renderWaitingPlayers(s){
+ const players=document.querySelector('#players');if(!players)return;
+ let panel=document.querySelector('#waitingPlayersPanel');
+ const waiting=(s.room?.players||[]).filter(p=>p.waiting);
+ if(!waiting.length){panel?.remove();return}
+ if(!panel){panel=document.createElement('aside');panel.id='waitingPlayersPanel';panel.className='waitingPlayersPanel';players.insertAdjacentElement('afterend',panel)}
+ panel.innerHTML=`<div class="waitingPlayersHead"><strong>다음 판 참가</strong><span>${waiting.length}명</span></div><div class="waitingPlayersList">${waiting.map(p=>`<div class="waitingPlayer ${p.id===s.viewerId?'me':''}"><span class="waitingDot"></span><span class="waitingName">${esc(p.name)}${p.id===s.viewerId?' · 나':''}</span><small>관전 중</small></div>`).join('')}</div>`
 }
 function flashReceivedCards(g,s){
  const me=g.players?.find(p=>p.id===s.viewerId),ids=new Set((me?.hand||[]).map(c=>c.id));
@@ -35,7 +40,7 @@ function renderStateUi(){
  if(g.pile){owner.textContent=`${g.pile.playerName} 제출`;owner.className='pileOwner pileOwnerSubmitted'}
  else if(g.phase==='play'&&cur){owner.textContent=`${cur.name} 선`;owner.className='pileOwner pileOwnerLead'}
  else{owner.textContent='';owner.className='pileOwner'}
- flashReceivedCards(g,s);flashDalmuti(g,game)
+ renderWaitingPlayers(s);flashReceivedCards(g,s);flashDalmuti(g,game)
 }
 function schedule(){if(q)return;q=true;requestAnimationFrame(()=>{q=false;renderStateUi()})}
 new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});
