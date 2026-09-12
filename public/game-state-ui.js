@@ -2,10 +2,11 @@
 let q=false,lastDalmutiKey='',lastHandIds=new Set(),lastTaxHand=0;
 function playerName(g,id){return g.players?.find(p=>p.id===id)?.name||''}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function taxText(g,s,cur){
- const p=g.tax?.pending,count=p?.count||1,upper=playerName(g,p?.upperId),lower=playerName(g,p?.lowerId);
- if(g.currentPlayerId===s.viewerId)return `세금 교환 · ${lower||'하위 플레이어'}의 광대를 제외한 최고 카드 ${count}장은 자동으로 정해졌습니다. 내 패에서 교환할 카드 ${count}장을 선택하세요.`;
- return `세금 교환 · ${lower||'하위 플레이어'}의 최고 카드 ${count}장은 자동 선택되었습니다. ${cur?.name||upper||'상위 플레이어'}이(가) 교환할 카드 ${count}장을 고르는 중입니다.`
+function taxText(g,s){
+ const p=g.tax?.pending;
+ if(p){const lower=playerName(g,p.lowerId);return `세금 교환 · ${lower||'하위 플레이어'}의 광대를 제외한 최고 카드 ${p.count}장은 자동 선택되었습니다. 내 패에서 교환할 카드 ${p.count}장을 선택하세요.`}
+ const waiting=(g.tax?.exchanges||[]).filter(x=>!x.done).map(x=>playerName(g,x.upperId)).filter(Boolean);
+ return waiting.length?`세금 교환 · ${waiting.join(', ')}의 선택을 기다리는 중입니다.`:'세금 교환을 마무리하는 중입니다.'
 }
 function renderWaitingPlayers(s){
  const players=document.querySelector('#players');if(!players)return;
@@ -36,10 +37,10 @@ function renderStateUi(){
  const game=document.querySelector('#game'),pile=document.querySelector('#pile'),owner=document.querySelector('#pileOwner'),status=document.querySelector('#status');
  if(!game||!pile||!owner||!s?.game)return;
  if(owner.previousElementSibling!==pile)pile.insertAdjacentElement('afterend',owner);
- const g=s.game,cur=g.players?.find(p=>p.id===g.currentPlayerId),myTurn=g.phase==='play'&&g.currentPlayerId===s.viewerId,myTax=g.phase==='tax'&&g.currentPlayerId===s.viewerId;
+ const g=s.game,cur=g.players?.find(p=>p.id===g.currentPlayerId),myTurn=g.phase==='play'&&g.currentPlayerId===s.viewerId,myTax=g.phase==='tax'&&!!g.tax?.pending;
  game.classList.toggle('myTurn',!!myTurn);game.classList.toggle('taxPhase',g.phase==='tax');game.classList.toggle('myTaxTurn',!!myTax);
  status?.classList.toggle('myTurnStatus',!!myTurn);status?.classList.toggle('taxActionStatus',!!myTax);status?.classList.toggle('taxWaitingStatus',g.phase==='tax'&&!myTax);
- if(g.phase==='tax'&&status){const text=taxText(g,s,cur);if(status.textContent!==text)status.textContent=text}
+ if(g.phase==='tax'&&status){const text=taxText(g,s);if(status.textContent!==text)status.textContent=text}
  if(g.pile){owner.textContent=`${g.pile.playerName} 제출`;owner.className='pileOwner pileOwnerSubmitted'}
  else if(g.phase==='play'&&cur){owner.textContent=`${cur.name} 선`;owner.className='pileOwner pileOwnerLead'}
  else{owner.textContent='';owner.className='pileOwner'}
