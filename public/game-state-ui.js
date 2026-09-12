@@ -9,6 +9,7 @@ function taxText(g,s,cur){
 }
 function renderWaitingPlayers(s){
  const players=document.querySelector('#players');if(!players)return;
+ players.querySelectorAll('.player.waiting').forEach(el=>el.remove());
  let panel=document.querySelector('#waitingPlayersPanel');
  const waiting=(s.room?.players||[]).filter(p=>p.waiting);
  if(!waiting.length){panel?.remove();return}
