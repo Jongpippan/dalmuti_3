@@ -2,13 +2,13 @@
 let q=false,lastDalmutiKey='',lastHandIds=new Set(),lastTaxHand=0;
 function playerName(g,id){return g.players?.find(p=>p.id===id)?.name||''}
 function taxText(g,s,cur){
- const p=g.tax?.pending,count=p?.count||1,upper=playerName(g,p?.upperId),lower=playerName(g,p?.lowerId),side=p?.side;
+ const p=g.tax?.pending,stage=g.tax?.stage||'',count=p?.count||(stage.startsWith('greater')?2:1),side=p?.side||(stage.includes('-lower-')?'lower':'upper'),upper=playerName(g,p?.upperId),lower=playerName(g,p?.lowerId);
  if(g.currentPlayerId===s.viewerId){
   const partner=side==='lower'?upper:lower;
   return `세금 교환 · ${partner||'상대'}와 교환할 카드 ${count}장을 내 패에서 선택하세요. 상대가 고른 카드는 아직 들어오지 않습니다.`
  }
- if(side==='lower')return `세금 교환 · ${lower||cur?.name||'하위 플레이어'}이(가) ${upper||'상위 플레이어'}와 교환할 카드 ${count}장을 고르는 중입니다.`;
- return `세금 교환 · ${lower||'하위 플레이어'}의 선택 완료. ${upper||cur?.name||'상위 플레이어'}이(가) 교환할 카드 ${count}장을 고르는 중입니다.`
+ if(side==='lower')return `세금 교환 · ${cur?.name||lower||'하위 플레이어'}이(가) 교환할 카드 ${count}장을 고르는 중입니다.`;
+ return `세금 교환 · 하위 플레이어의 선택 완료. ${cur?.name||upper||'상위 플레이어'}이(가) 교환할 카드 ${count}장을 고르는 중입니다.`
 }
 function flashReceivedCards(g,s){
  const me=g.players?.find(p=>p.id===s.viewerId),ids=new Set((me?.hand||[]).map(c=>c.id));
