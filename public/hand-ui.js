@@ -22,7 +22,6 @@ function layout(){
  const total=(xs.at(-1)||0)+cardW,offset=total/2-cardW/2;
  cs.forEach((c,i)=>{c.style.setProperty('--fan-x',`${xs[i]-offset}px`);c.style.setProperty('--fan-y','0px');c.style.setProperty('--fan-r','0deg');c.style.zIndex=String(i+2)});
  const play=$('#actions [data-a="play"]');if(play)play.textContent='제출';
- bindCards();
  lastSignature=sig;setSortButtons();
  if(sameHand)requestAnimationFrame(()=>hand.classList.remove('noFanTransition'))
 }
@@ -56,22 +55,19 @@ function handleCardClick(card){
  if(g.phase!=='play'||g.currentPlayerId!==s.viewerId)return;
  const ids=autoGroupIds(card);
  if(!ids.length){const need=g.pile?.count||1;toast(`${need}장 묶음을 만들 카드가 부족합니다.`);return}
- const current=selectedIds();
- const sameSelection=current.size===ids.length&&ids.every(id=>current.has(id));
- setSelected(sameSelection?[]:ids)
-}
-function bindCards(){
- for(const card of cards()){
-  if(card.dataset.handBound==='1')continue;
-  card.dataset.handBound='1';
-  card.onclick=e=>{e.preventDefault();e.stopPropagation();handleCardClick(card)}
- }
+ setSelected(ids)
 }
 function bindStatic(){
  const rank=$('#sortRank'),count=$('#sortCount');
  if(rank&&!rank.dataset.bound){rank.dataset.bound='1';rank.onclick=()=>{sortMode='rank';localStorage.setItem('dalmuti-hand-sort',sortMode);lastSignature='';layout()}}
  if(count&&!count.dataset.bound){count.dataset.bound='1';count.onclick=()=>{sortMode='count';localStorage.setItem('dalmuti-hand-sort',sortMode);lastSignature='';layout()}}
 }
-const observer=new MutationObserver(()=>{bindStatic();bindCards();schedule()});observer.observe(document.documentElement,{subtree:true,childList:true});
-window.addEventListener('resize',()=>{lastSignature='';schedule()});document.addEventListener('DOMContentLoaded',()=>{bindStatic();bindCards();layout()});bindStatic();bindCards();schedule();
+document.addEventListener('click',e=>{
+ const card=e.target.closest?.('#hand button.card[data-id]');
+ if(!card)return;
+ e.preventDefault();
+ handleCardClick(card)
+});
+const observer=new MutationObserver(()=>{bindStatic();schedule()});observer.observe(document.documentElement,{subtree:true,childList:true});
+window.addEventListener('resize',()=>{lastSignature='';schedule()});document.addEventListener('DOMContentLoaded',()=>{bindStatic();layout()});bindStatic();schedule();
 })();
