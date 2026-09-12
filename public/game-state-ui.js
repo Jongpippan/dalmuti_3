@@ -21,12 +21,14 @@ function flashReceivedCards(g,s){
  if(g.handNumber!==lastTaxHand){lastTaxHand=g.handNumber;lastHandIds=ids;return}
  const added=[...ids].filter(id=>!lastHandIds.has(id));lastHandIds=ids;
  if(!added.length)return;
- requestAnimationFrame(()=>{for(const id of added){const card=document.querySelector(`#hand .card[data-id="${CSS.escape(id)}"]`);if(card){card.classList.add('taxReceived');setTimeout(()=>card.classList.remove('taxReceived'),1800)}}})
+ requestAnimationFrame(()=>{for(const id of added){const card=document.querySelector(`#hand .card[data-id="${CSS.escape(id)}"]`);if(card){card.classList.add('taxReceived');setTimeout(()=>card.classList.remove('taxReceived'),5000)}}})
 }
 function flashDalmuti(g,game){
  const line=g.logs?.at(-1)||'';
  if(!line.includes('달무티 카드는 자동으로 선을 먹습니다.'))return;
  const key=`${g.handNumber}:${g.logs.length}:${line}`;if(key===lastDalmutiKey)return;lastDalmutiKey=key;
+ const playLine=g.logs?.at(-2)||'',m=playLine.match(/^(.*?)이\(가\) 달무티 \d+장을 냈습니다\.$/),name=m?.[1]||'플레이어';
+ game.style.setProperty('--dalmuti-label',`"${String(name).replace(/["\\]/g,'')}가 달무티 제출!"`);
  game.classList.remove('dalmutiFlash');void game.offsetWidth;game.classList.add('dalmutiFlash');setTimeout(()=>game.classList.remove('dalmutiFlash'),1100)
 }
 function renderStateUi(){
