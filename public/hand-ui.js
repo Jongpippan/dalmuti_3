@@ -28,8 +28,10 @@ function setSelected(ids){
 }
 function toast(msg){const t=$('#toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
 function autoGroupIds(card){
- let need=1;try{need=state?.game?.pile?.count||1}catch{}
- const rank=rankOf(card),all=cards();
+ const all=cards(),rank=rankOf(card);
+ let pile=null;try{pile=state?.game?.pile||null}catch{}
+ if(!pile)return all.filter(c=>rankOf(c)===rank).map(c=>c.dataset.id);
+ const need=pile.count||1;
  if(need===1)return[card.dataset.id];
  if(rank===13)return[];
  const same=all.filter(c=>rankOf(c)===rank),jokers=all.filter(c=>rankOf(c)===13),ordered=[card,...same.filter(c=>c!==card)],ids=ordered.slice(0,need).map(c=>c.dataset.id);
