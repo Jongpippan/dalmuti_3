@@ -28,7 +28,7 @@ function flashDalmuti(g,game){
  const line=g.logs?.at(-1)||'';
  if(!line.includes('달무티 카드는 자동으로 선을 먹습니다.'))return;
  const key=`${g.handNumber}:${g.logs.length}:${line}`;if(key===lastDalmutiKey)return;lastDalmutiKey=key;
- const playLine=g.logs?.at(-2)||'',m=playLine.match(/^(.*?)이\(가\) 달무티 \d+장을 냈습니다\.$/),name=m?.[1]||'플레이어';
+ const re=/^(.*?)이\(가\) 달무티 \d+장을 냈습니다\.$/,playLine=[...(g.logs||[])].reverse().find(x=>re.test(x))||'',m=playLine.match(re),name=m?.[1]||'플레이어';
  game.style.setProperty('--dalmuti-label',`"${String(name).replace(/["\\]/g,'')}가 달무티 제출!"`);
  game.classList.remove('dalmutiFlash');void game.offsetWidth;game.classList.add('dalmutiFlash');setTimeout(()=>game.classList.remove('dalmutiFlash'),1100)
 }
