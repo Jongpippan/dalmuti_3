@@ -14,6 +14,17 @@ function playerInfo(){
 }
 function avatarHtml(id,extra=''){return `<span class="avatar ${extra}" aria-hidden="true">${window.dalmutiPortraitSvg?.(id)||window.dalmutiPortraitSvg?.('royal')||''}</span>`}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function ensurePlayerInner(p,rp){
+ let inner=p.querySelector(':scope > .playerInner');
+ if(!inner){
+  inner=document.createElement('div');inner.className='playerInner';
+  while(p.firstChild)inner.appendChild(p.firstChild);
+  p.appendChild(inner)
+ }
+ if(rp&&!inner.querySelector('.playerAvatar'))inner.insertAdjacentHTML('afterbegin',avatarHtml(rp.portrait,'playerAvatar'));
+ if(rp)p.classList.add('hasAvatar');
+ return inner
+}
 function applyChat(){
  const info=playerInfo(),items=state?.room?.chat||[];
  $all('.chatlog').forEach(log=>{
@@ -32,7 +43,7 @@ function applyChat(){
   })
  })
 }
-function applyPlayers(){const room=roomByName(),active=$all('#players .player:not(.waiting)');active.forEach((p,i)=>{const role=p.querySelector('.role'),name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);if(role)role.textContent=TITLES[i]||`${i+1}위`;const meta=p.querySelector('.pmeta');if(meta&&!meta.querySelector('.miniCards')){const m=meta.textContent.match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}if(rp&&!p.querySelector('.playerAvatar')){p.classList.add('hasAvatar');p.insertAdjacentHTML('afterbegin',avatarHtml(rp.portrait,'playerAvatar'))}p.querySelector('.playerRest')?.remove();const labels=[];if(rp?.resting)labels.push('잠자기');if(rp?.aiPlaying)labels.push('AI 플레이 중');if(labels.length){const s=document.createElement('span');s.className='playerRest';s.textContent=' · '+labels.join(' · ');meta?.appendChild(s)}});$all('#players .player.waiting').forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);if(rp&&!p.querySelector('.playerAvatar')){p.classList.add('hasAvatar');p.insertAdjacentHTML('afterbegin',avatarHtml(rp.portrait,'playerAvatar'))}})}
+function applyPlayers(){const room=roomByName(),active=$all('#players .player:not(.waiting)');active.forEach((p,i)=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),inner=ensurePlayerInner(p,rp),role=inner.querySelector('.role');if(role)role.textContent=TITLES[i]||`${i+1}위`;const meta=inner.querySelector('.pmeta');if(meta&&!meta.querySelector('.miniCards')){const m=meta.textContent.match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}inner.querySelector('.playerRest')?.remove();const labels=[];if(rp?.resting)labels.push('잠자기');if(rp?.aiPlaying)labels.push('AI 플레이 중');if(labels.length){const s=document.createElement('span');s.className='playerRest';s.textContent=' · '+labels.join(' · ');meta?.appendChild(s)}});$all('#players .player.waiting').forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);ensurePlayerInner(p,rp)})}
 function apply(){applyPlayers();$all('.card').forEach(card=>{const rank=rankFromCard(card),name=card.querySelector('.name');if(name&&TITLES[rank-1])name.textContent=TITLES[rank-1]});applyChat()}
 let queued=false;function schedule(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;apply()})}
 new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});document.addEventListener('DOMContentLoaded',apply);apply();
