@@ -9,6 +9,11 @@ function taxText(g,s){
  const waiting=(g.tax?.exchanges||[]).filter(x=>!x.done).map(x=>playerName(g,x.upperId)).filter(Boolean);
  return waiting.length?`세금 교환 · ${waiting.join(', ')}의 선택을 기다리는 중입니다.`:'세금 교환을 마무리하는 중입니다.'
 }
+function ensurePileOverlay(pile){
+ let overlay=pile.querySelector(':scope > .pileOverlay');
+ if(!overlay){overlay=document.createElement('span');overlay.className='pileOverlay';overlay.innerHTML='<span>현재 묶음</span><strong id="pileOwner"></strong>';pile.prepend(overlay)}
+ return overlay.querySelector('#pileOwner')
+}
 function renderWaitingPlayers(s){
  const players=document.querySelector('#players');if(!players)return;
  players.querySelectorAll('.player.waiting').forEach(el=>el.remove());
@@ -16,7 +21,8 @@ function renderWaitingPlayers(s){
  const waiting=(s.room?.players||[]).filter(p=>p.waiting);
  if(!waiting.length){panel?.remove();return}
  if(!panel){panel=document.createElement('aside');panel.id='waitingPlayersPanel';panel.className='waitingPlayersPanel';players.insertAdjacentElement('afterend',panel)}
- panel.innerHTML=`<div class="waitingPlayersHead"><strong>다음 판 참가</strong><span>${waiting.length}명</span></div><div class="waitingPlayersList">${waiting.map(p=>`<div class="waitingPlayer ${p.id===s.viewerId?'me':''}"><span class="waitingDot"></span><span class="waitingName">${esc(p.name)}${p.id===s.viewerId?' · 나':''}</span><small>관전 중</small></div>`).join('')}</div>`
+ const html=`<div class="waitingPlayersHead"><strong>다음 판 참가</strong><span>${waiting.length}명</span></div><div class="waitingPlayersList">${waiting.map(p=>`<div class="waitingPlayer ${p.id===s.viewerId?'me':''}"><span class="waitingDot"></span><span class="waitingName">${esc(p.name)}${p.id===s.viewerId?' · 나':''}</span><small>관전 중</small></div>`).join('')}</div>`;
+ if(panel.innerHTML!==html)panel.innerHTML=html
 }
 function flashReceivedCards(g,s){
  const me=g.players?.find(p=>p.id===s.viewerId),ids=new Set((me?.hand||[]).map(c=>c.id));
@@ -36,13 +42,12 @@ function flashDalmuti(g,game){
 }
 function renderStateUi(){
  let s=null;try{s=state}catch{}
- const game=document.querySelector('#game'),pile=document.querySelector('#pile'),owner=document.querySelector('#pileOwner'),status=document.querySelector('#status');
- if(!game||!pile||!owner||!s?.game)return;
- if(owner.previousElementSibling!==pile)pile.insertAdjacentElement('afterend',owner);
- const g=s.game,cur=g.players?.find(p=>p.id===g.currentPlayerId),myTurn=g.phase==='play'&&g.currentPlayerId===s.viewerId,myTax=g.phase==='tax'&&!!g.tax?.pending;
+ const game=document.querySelector('#game'),pile=document.querySelector('#pile'),status=document.querySelector('#status'),handStatus=document.querySelector('#handStatus');
+ if(!game||!pile||!s?.game)return;
+ const owner=ensurePileOverlay(pile),g=s.game,cur=g.players?.find(p=>p.id===g.currentPlayerId),myTurn=g.phase==='play'&&g.currentPlayerId===s.viewerId,myTax=g.phase==='tax'&&!!g.tax?.pending;
  game.classList.toggle('myTurn',!!myTurn);game.classList.toggle('taxPhase',g.phase==='tax');game.classList.toggle('myTaxTurn',!!myTax);
- status?.classList.toggle('myTurnStatus',!!myTurn);status?.classList.toggle('taxActionStatus',!!myTax);status?.classList.toggle('taxWaitingStatus',g.phase==='tax'&&!myTax);
- if(g.phase==='tax'&&status){const text=taxText(g,s);if(status.textContent!==text)status.textContent=text}
+ if(status){status.classList.toggle('hidden',g.phase==='play');status.classList.remove('myTurnStatus');status.classList.toggle('taxActionStatus',!!myTax);status.classList.toggle('taxWaitingStatus',g.phase==='tax'&&!myTax);if(g.phase==='tax'){const text=taxText(g,s);if(status.textContent!==text)status.textContent=text}}
+ if(handStatus){handStatus.textContent=myTurn?'내 차례입니다.':'';handStatus.classList.toggle('hidden',!myTurn)}
  if(g.pile){owner.textContent=`${g.pile.playerName} 제출`;owner.className='pileOwner pileOwnerSubmitted';owner.style.setProperty('--pile-owner-color',playerColor(g.pile.playerId))}
  else if(g.phase==='play'&&cur){owner.textContent=`${cur.name} 선`;owner.className='pileOwner pileOwnerLead';owner.style.setProperty('--pile-owner-color',playerColor(cur.id))}
  else{owner.textContent='';owner.className='pileOwner';owner.style.removeProperty('--pile-owner-color')}
