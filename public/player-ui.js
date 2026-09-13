@@ -12,18 +12,18 @@ function colorIndex(id){let h=0;for(const ch of String(id||''))h=(h*31+ch.charCo
 function colorForId(id){return CHAT_COLORS[colorIndex(id)]}
 function playerInfo(){
  const map=new Map(),room=roomById(),game=state?.game?.players||[];
- for(const gp of game){const rp=room.get(gp.id),rank=(gp.roleIndex??0)+1;map.set(gp.id,{title:gp.role||TITLES[rank-1]||`${rank}위`,rank,portrait:rp?.portrait||gp.portrait||'royal',resting:!!rp?.resting,aiPlaying:!!rp?.aiPlaying,color:colorForId(gp.id)})}
+ for(const gp of game){const rp=room.get(gp.id),rank=(gp.roleIndex??0)+1;map.set(gp.id,{id:gp.id,title:gp.role||TITLES[rank-1]||`${rank}위`,rank,portrait:rp?.portrait||gp.portrait||'royal',resting:!!rp?.resting,aiPlaying:!!rp?.aiPlaying,color:colorForId(gp.id)})}
  return map
 }
-function avatarHtml(id,extra=''){return `<span class="avatar ${extra}" aria-hidden="true">${window.dalmutiPortraitSvg?.(id)||window.dalmutiPortraitSvg?.('royal')||''}</span>`}
+function avatarHtml(id,extra='',accent){return `<span class="avatar ${extra}" aria-hidden="true">${window.dalmutiPortraitSvg?.(id,accent)||window.dalmutiPortraitSvg?.('royal',accent)||''}</span>`}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function ensurePlayerInner(p,rp){
  let inner=p.querySelector(':scope > .playerInner');
  if(!inner){inner=document.createElement('div');inner.className='playerInner';while(p.firstChild)inner.appendChild(p.firstChild);p.appendChild(inner)}
- const avatar=inner.querySelector('.playerAvatar');
- if(rp&&!avatar)inner.insertAdjacentHTML('afterbegin',avatarHtml(rp.portrait,'playerAvatar'));
- else if(rp&&avatar&&avatar.dataset.portrait!==rp.portrait){avatar.innerHTML=window.dalmutiPortraitSvg?.(rp.portrait)||'';avatar.dataset.portrait=rp.portrait}
- const currentAvatar=inner.querySelector('.playerAvatar');if(currentAvatar&&rp)currentAvatar.dataset.portrait=rp.portrait;
+ const accent=rp?.id?colorForId(rp.id).accent:null,avatar=inner.querySelector('.playerAvatar'),signature=`${rp?.portrait||''}|${accent||''}`;
+ if(rp&&!avatar)inner.insertAdjacentHTML('afterbegin',avatarHtml(rp.portrait,'playerAvatar',accent));
+ else if(rp&&avatar&&avatar.dataset.portraitSignature!==signature)avatar.innerHTML=window.dalmutiPortraitSvg?.(rp.portrait,accent)||'';
+ const currentAvatar=inner.querySelector('.playerAvatar');if(currentAvatar&&rp)currentAvatar.dataset.portraitSignature=signature;
  if(rp)p.classList.add('hasAvatar');
  return inner
 }
@@ -39,7 +39,7 @@ function applyChat(){
    msg.dataset.chatDecorated='1';msg.classList.add('playerChat');
    msg.style.setProperty('--chat-accent',p.color.accent);msg.style.setProperty('--chat-bg',p.color.bg);
    const transformed=!!item.masked;
-   msg.innerHTML=`${avatarHtml(p.portrait)}<span class="chatText"><b>${escapeHtml(item.name)}</b><span class="chatRank">${escapeHtml(p.title)} · ${p.rank}위</span><span class="chatBody ${transformed?'transformedChat':''}">${escapeHtml(item.text)}</span></span>`
+   msg.innerHTML=`${avatarHtml(p.portrait,'',p.color.accent)}<span class="chatText"><b>${escapeHtml(item.name)}</b><span class="chatRank">${escapeHtml(p.title)} · ${p.rank}위</span><span class="chatBody ${transformed?'transformedChat':''}">${escapeHtml(item.text)}</span></span>`
   })
  })
 }
