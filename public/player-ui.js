@@ -25,7 +25,7 @@ function playerInfo(){
  return map
 }
 function avatarHtml(id,extra='',accent){return `<span class="avatar ${extra}" aria-hidden="true">${window.dalmutiPortraitSvg?.(id,accent)||window.dalmutiPortraitSvg?.('royal',accent)||''}</span>`}
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]))}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function ensurePlayerInner(p,rp){
  let inner=p.querySelector(':scope > .playerInner');
  if(!inner){inner=document.createElement('div');inner.className='playerInner';while(p.firstChild)inner.appendChild(p.firstChild);p.appendChild(inner)}
