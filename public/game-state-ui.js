@@ -12,7 +12,7 @@ function taxText(g,s){
 }
 function ensurePileOverlay(pile){
  let overlay=pile.querySelector(':scope > .pileOverlay');
- if(!overlay){overlay=document.createElement('span');overlay.className='pileOverlay';overlay.innerHTML='<span>현재 묶음</span><strong id="pileOwner"></strong>';pile.prepend(overlay)}
+ if(!overlay){overlay=document.createElement('span');overlay.className='pileOverlay';overlay.innerHTML='<span>현재 묶음</span><strong id="pileOwner"></strong>';pile.append(overlay)}
  return overlay.querySelector('#pileOwner')
 }
 function renderWaitingPlayers(s){
