@@ -7,52 +7,42 @@ const $all=s=>[...document.querySelectorAll(s)];
 function rankFromCard(card){const t=card.querySelector('.num')?.textContent?.trim();return t==='★'?13:Number(t)||0}
 function miniHand(count){if(!count)return'';const cards=Array.from({length:count},(_,i)=>`<i style="--i:${i}"></i>`).join('');return `<span class="miniCards" aria-label="남은 카드 ${count}장" style="--count:${count}">${cards}</span>`}
 function roomByName(){const m=new Map();try{for(const p of state?.room?.players||[])m.set(p.name,p)}catch{}return m}
+function roomById(){const m=new Map();try{for(const p of state?.room?.players||[])m.set(p.id,p)}catch{}return m}
+function colorIndex(id){let h=0;for(const ch of String(id||''))h=(h*31+ch.charCodeAt(0))>>>0;return h%CHAT_COLORS.length}
 function playerInfo(){
- const map=new Map(),active=$all('#players .player:not(.waiting)'),room=roomByName();
- active.forEach((p,i)=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),color=CHAT_COLORS[i%CHAT_COLORS.length];if(name)map.set(name,{title:TITLES[i]||`${i+1}위`,rank:i+1,lowest:i===active.length-1,portrait:rp?.portrait||'royal',resting:!!rp?.resting,aiPlaying:!!rp?.aiPlaying,color})});
+ const map=new Map(),room=roomById(),game=state?.game?.players||[];
+ for(const gp of game){const rp=room.get(gp.id),rank=(gp.roleIndex??0)+1;map.set(gp.id,{title:gp.role||TITLES[rank-1]||`${rank}위`,rank,portrait:rp?.portrait||gp.portrait||'royal',resting:!!rp?.resting,aiPlaying:!!rp?.aiPlaying,color:CHAT_COLORS[colorIndex(gp.id)]})}
  return map
 }
 function avatarHtml(id,extra=''){return `<span class="avatar ${extra}" aria-hidden="true">${window.dalmutiPortraitSvg?.(id)||window.dalmutiPortraitSvg?.('royal')||''}</span>`}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function ensurePlayerInner(p,rp){
  let inner=p.querySelector(':scope > .playerInner');
- if(!inner){
-  inner=document.createElement('div');inner.className='playerInner';
-  while(p.firstChild)inner.appendChild(p.firstChild);
-  p.appendChild(inner)
- }
+ if(!inner){inner=document.createElement('div');inner.className='playerInner';while(p.firstChild)inner.appendChild(p.firstChild);p.appendChild(inner)}
  if(rp&&!inner.querySelector('.playerAvatar'))inner.insertAdjacentHTML('afterbegin',avatarHtml(rp.portrait,'playerAvatar'));
  if(rp)p.classList.add('hasAvatar');
  return inner
 }
 function applyChat(){
- const info=playerInfo(),items=state?.room?.chat||[];
+ const info=playerInfo(),items=state?.room?.chat||[],byId=new Map(items.map(x=>[x.id,x]));
  $all('.chatlog').forEach(log=>{
-  const msgs=[...log.querySelectorAll('.chatmsg')];
-  msgs.forEach((msg,i)=>{
-   const b=msg.querySelector('b');if(!b)return;
-   const name=b.textContent.trim(),item=items[i];
-   if(!msg.dataset.rawText){const clone=msg.cloneNode(true);clone.querySelector('b')?.remove();clone.querySelector('.chatRank')?.remove();clone.querySelector('.avatar')?.remove();msg.dataset.rawText=clone.textContent.trim()}
-   const raw=msg.dataset.rawText||'';
-   if(name==='시스템'&&raw.includes('이번 라운드를 쉽니다.')){msg.classList.add('hidden');return}
-   const p=info.get(name);if(!p)return;
-   msg.classList.remove('lowestChat');msg.classList.add('playerChat');
+  [...log.querySelectorAll('.chatmsg')].forEach(msg=>{
+   const item=byId.get(msg.dataset.chatId);
+   if(!item)return;
+   if(item.name==='시스템'&&String(item.text||'').includes('이번 라운드를 쉽니다.')){msg.classList.add('hidden');return}
+   if(msg.dataset.chatDecorated==='1')return;
+   const p=info.get(item.playerId);if(!p)return;
+   msg.dataset.chatDecorated='1';msg.classList.add('playerChat');
    msg.style.setProperty('--chat-accent',p.color.accent);msg.style.setProperty('--chat-bg',p.color.bg);
-   const transformed=!!item?.masked;
-   msg.innerHTML=`${avatarHtml(p.portrait)}<span class="chatText"><b>${escapeHtml(name)}</b><span class="chatRank">${escapeHtml(p.title)} · ${p.rank}위</span><span class="chatBody ${transformed?'transformedChat':''}">${escapeHtml(raw)}</span></span>`
+   const transformed=!!item.masked;
+   msg.innerHTML=`${avatarHtml(p.portrait)}<span class="chatText"><b>${escapeHtml(item.name)}</b><span class="chatRank">${escapeHtml(p.title)} · ${p.rank}위</span><span class="chatBody ${transformed?'transformedChat':''}">${escapeHtml(item.text)}</span></span>`
   })
  })
 }
 function decorateDeparture(p,meta){
- const text=meta?.textContent||'',departed=text.includes('나감');
- p.classList.toggle('departed',departed);
- if(!meta)return;
- const plain=text.replace(/\s*·\s*나감\s*/g,' · 나감').trim();
- const match=plain.match(/(?:^|·\s*)(\d+)위(?:\s*·\s*나감)?$/);
- meta.querySelector('.finishPlaceBadge')?.remove();
- if(departed&&match){
-  const badge=document.createElement('span');badge.className='finishPlaceBadge';badge.textContent=`${match[1]}위`;meta.appendChild(badge)
- }
+ const text=meta?.textContent||'',departed=text.includes('나감');p.classList.toggle('departed',departed);if(!meta)return;
+ const plain=text.replace(/\s*·\s*나감\s*/g,' · 나감').trim(),match=plain.match(/(?:^|·\s*)(\d+)위(?:\s*·\s*나감)?$/);meta.querySelector('.finishPlaceBadge')?.remove();
+ if(departed&&match){const badge=document.createElement('span');badge.className='finishPlaceBadge';badge.textContent=`${match[1]}위`;meta.appendChild(badge)}
 }
 function applyPlayers(){const room=roomByName(),active=$all('#players .player:not(.waiting)');active.forEach((p,i)=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),inner=ensurePlayerInner(p,rp),role=inner.querySelector('.role');if(role)role.textContent=TITLES[i]||`${i+1}위`;const meta=inner.querySelector('.pmeta');if(meta&&!meta.querySelector('.miniCards')){const m=meta.textContent.match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}decorateDeparture(p,meta);inner.querySelector('.playerRest')?.remove();const labels=[];if(rp?.resting)labels.push('잠자기');if(rp?.aiPlaying)labels.push('AI 플레이 중');if(labels.length){const s=document.createElement('span');s.className='playerRest';s.textContent=' · '+labels.join(' · ');meta?.appendChild(s)}});$all('#players .player.waiting').forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);ensurePlayerInner(p,rp)})}
 function apply(){applyPlayers();$all('.card').forEach(card=>{const rank=rankFromCard(card),name=card.querySelector('.name');if(name&&TITLES[rank-1])name.textContent=TITLES[rank-1]});applyChat()}
