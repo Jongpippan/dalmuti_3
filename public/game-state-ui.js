@@ -1,6 +1,7 @@
 (()=>{
 let q=false,lastDalmutiKey='',lastHandIds=new Set(),lastTaxHand=0;
 function playerName(g,id){return g.players?.find(p=>p.id===id)?.name||''}
+function playerColor(id){return window.dalmutiPlayerColor?.(id)?.accent||'#60a5fa'}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function taxText(g,s){
  const p=g.tax?.pending;
@@ -28,8 +29,9 @@ function flashDalmuti(g,game){
  const line=g.logs?.at(-1)||'';
  if(!line.includes('달무티 카드는 자동으로 선을 먹습니다.'))return;
  const key=`${g.handNumber}:${g.logs.length}:${line}`;if(key===lastDalmutiKey)return;lastDalmutiKey=key;
- const re=/^(.*?)이\(가\) 달무티 \d+장을 냈습니다\.$/,playLine=[...(g.logs||[])].reverse().find(x=>re.test(x))||'',m=playLine.match(re),name=m?.[1]||'플레이어';
+ const re=/^(.*?)이\(가\) 달무티 \d+장을 냈습니다\.$/,playLine=[...(g.logs||[])].reverse().find(x=>re.test(x))||'',m=playLine.match(re),name=m?.[1]||'플레이어',player=g.players?.find(p=>p.name===name),accent=playerColor(player?.id);
  game.style.setProperty('--dalmuti-label',`"${String(name).replace(/["\\]/g,'')}가 달무티 제출!"`);
+ game.style.setProperty('--dalmuti-accent',accent);
  game.classList.remove('dalmutiFlash');void game.offsetWidth;game.classList.add('dalmutiFlash');setTimeout(()=>game.classList.remove('dalmutiFlash'),1100)
 }
 function renderStateUi(){
@@ -41,9 +43,9 @@ function renderStateUi(){
  game.classList.toggle('myTurn',!!myTurn);game.classList.toggle('taxPhase',g.phase==='tax');game.classList.toggle('myTaxTurn',!!myTax);
  status?.classList.toggle('myTurnStatus',!!myTurn);status?.classList.toggle('taxActionStatus',!!myTax);status?.classList.toggle('taxWaitingStatus',g.phase==='tax'&&!myTax);
  if(g.phase==='tax'&&status){const text=taxText(g,s);if(status.textContent!==text)status.textContent=text}
- if(g.pile){owner.textContent=`${g.pile.playerName} 제출`;owner.className='pileOwner pileOwnerSubmitted'}
- else if(g.phase==='play'&&cur){owner.textContent=`${cur.name} 선`;owner.className='pileOwner pileOwnerLead'}
- else{owner.textContent='';owner.className='pileOwner'}
+ if(g.pile){owner.textContent=`${g.pile.playerName} 제출`;owner.className='pileOwner pileOwnerSubmitted';owner.style.setProperty('--pile-owner-color',playerColor(g.pile.playerId))}
+ else if(g.phase==='play'&&cur){owner.textContent=`${cur.name} 선`;owner.className='pileOwner pileOwnerLead';owner.style.setProperty('--pile-owner-color',playerColor(cur.id))}
+ else{owner.textContent='';owner.className='pileOwner';owner.style.removeProperty('--pile-owner-color')}
  renderWaitingPlayers(s);flashReceivedCards(g,s);flashDalmuti(g,game)
 }
 function schedule(){if(q)return;q=true;requestAnimationFrame(()=>{q=false;renderStateUi()})}
