@@ -3,6 +3,7 @@ let q=false,lastDalmutiKey='',lastHandIds=new Set(),lastTaxHand=0;
 function playerName(g,id){return g.players?.find(p=>p.id===id)?.name||''}
 function playerColor(id){return window.dalmutiPlayerColor?.(id)?.accent||'#60a5fa'}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function setText(el,text){if(el&&el.textContent!==text)el.textContent=text}
 function taxText(g,s){
  const p=g.tax?.pending;
  if(p){const lower=playerName(g,p.lowerId);return `세금 교환 · ${lower||'하위 플레이어'}의 광대를 제외한 최고 카드 ${p.count}장은 자동 선택되었습니다. 내 패에서 교환할 카드 ${p.count}장을 선택하세요.`}
@@ -46,11 +47,13 @@ function renderStateUi(){
  if(!game||!pile||!s?.game)return;
  const owner=ensurePileOverlay(pile),g=s.game,cur=g.players?.find(p=>p.id===g.currentPlayerId),myTurn=g.phase==='play'&&g.currentPlayerId===s.viewerId,myTax=g.phase==='tax'&&!!g.tax?.pending;
  game.classList.toggle('myTurn',!!myTurn);game.classList.toggle('taxPhase',g.phase==='tax');game.classList.toggle('myTaxTurn',!!myTax);
- if(status){status.classList.toggle('hidden',g.phase==='play');status.classList.remove('myTurnStatus');status.classList.toggle('taxActionStatus',!!myTax);status.classList.toggle('taxWaitingStatus',g.phase==='tax'&&!myTax);if(g.phase==='tax'){const text=taxText(g,s);if(status.textContent!==text)status.textContent=text}}
- if(handStatus){handStatus.textContent=myTurn?'내 차례입니다.':'';handStatus.classList.toggle('hidden',!myTurn)}
- if(g.pile){owner.textContent=`${g.pile.playerName} 제출`;owner.className='pileOwner pileOwnerSubmitted';owner.style.setProperty('--pile-owner-color',playerColor(g.pile.playerId))}
- else if(g.phase==='play'&&cur){owner.textContent=`${cur.name} 선`;owner.className='pileOwner pileOwnerLead';owner.style.setProperty('--pile-owner-color',playerColor(cur.id))}
- else{owner.textContent='';owner.className='pileOwner';owner.style.removeProperty('--pile-owner-color')}
+ if(status){status.classList.toggle('hidden',g.phase==='play');status.classList.remove('myTurnStatus');status.classList.toggle('taxActionStatus',!!myTax);status.classList.toggle('taxWaitingStatus',g.phase==='tax'&&!myTax);if(g.phase==='tax')setText(status,taxText(g,s))}
+ if(handStatus){setText(handStatus,myTurn?'내 차례입니다.':'');handStatus.classList.toggle('hidden',!myTurn)}
+ let ownerText='',ownerClass='pileOwner',ownerColor='';
+ if(g.pile){ownerText=`${g.pile.playerName} 제출`;ownerClass='pileOwner pileOwnerSubmitted';ownerColor=playerColor(g.pile.playerId)}
+ else if(g.phase==='play'&&cur){ownerText=`${cur.name} 선`;ownerClass='pileOwner pileOwnerLead';ownerColor=playerColor(cur.id)}
+ setText(owner,ownerText);if(owner.className!==ownerClass)owner.className=ownerClass;
+ if(ownerColor){if(owner.style.getPropertyValue('--pile-owner-color')!==ownerColor)owner.style.setProperty('--pile-owner-color',ownerColor)}else if(owner.style.getPropertyValue('--pile-owner-color'))owner.style.removeProperty('--pile-owner-color');
  renderWaitingPlayers(s);flashReceivedCards(g,s);flashDalmuti(g,game)
 }
 function schedule(){if(q)return;q=true;requestAnimationFrame(()=>{q=false;renderStateUi()})}
