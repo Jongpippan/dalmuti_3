@@ -1,13 +1,13 @@
 const http=require('http'),fs=require('fs'),path=require('path'),os=require('os'),crypto=require('crypto');
 const {URL}=require('url');const E=require('./game-engine');
 const PORT=Number(process.env.PORT||3000),HOST='0.0.0.0',PUBLIC=path.join(__dirname,'public'),rooms=new Map(),MAX_PLAYERS=8,MIN_PLAYERS=4;
-const PORTRAITS=new Set(['royal','mage','knight','princess','ninja','bard','fox','owl']),PORTRAIT_IDS=[...PORTRAITS];
+const PORTRAITS=new Set(['royal','mage','knight','princess','ninja','bard','fox','owl']),PORTRAIT_IDS=[...PORTRAITS],CUSTOM_PORTRAIT=/^custom:[0-4]\.[0-5]\.[0-5]\.[0-2]\.[0-5]$/;
 const MIME={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 function cleanName(v){const s=String(v||'').replace(/\s+/g,' ').trim().slice(0,14);if(!s)throw Error('닉네임을 입력해 주세요.');return s}
 function cleanMessage(v){const s=String(v||'').replace(/\s+/g,' ').trim().slice(0,120);if(!s)throw Error('메시지를 입력해 주세요.');return s}
 function pikaMask(v){const chars=[...String(v).replace(/\s/g,'')].length,repeats=Math.max(1,Math.ceil(chars/2));return Array.from({length:repeats},()=> '피카').join(' ')+'!'}
 function romanizeKorean(v){const L=['g','kk','n','d','tt','r','m','b','pp','s','ss','','j','jj','ch','k','t','p','h'],V=['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','u','wo','we','wi','yu','eu','ui','i'],T=['','k','k','ks','n','nj','nh','t','l','lk','lm','lb','ls','lt','lp','lh','m','p','ps','t','t','ng','t','t','k','t','p','h'];return[...String(v)].map(ch=>{const code=ch.charCodeAt(0)-0xAC00;if(code<0||code>11171)return ch;const li=Math.floor(code/588),vi=Math.floor((code%588)/28),ti=code%28;return L[li]+V[vi]+T[ti]}).join('')}
-function cleanPortrait(v){const s=String(v||'royal');return PORTRAITS.has(s)?s:'royal'}
+function cleanPortrait(v){const s=String(v||'royal');return PORTRAITS.has(s)||CUSTOM_PORTRAIT.test(s)?s:'royal'}
 function cleanCode(v){return String(v||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,6)}
 function newCode(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';for(let z=0;z<999;z++){let s='';for(let i=0;i<5;i++)s+=chars[Math.floor(Math.random()*chars.length)];if(!rooms.has(s))return s}throw Error('방 코드를 만들지 못했습니다.')}
 function getRoom(v){const r=rooms.get(cleanCode(v));if(!r)throw Error('방을 찾을 수 없습니다.');return r}
