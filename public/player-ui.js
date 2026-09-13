@@ -56,13 +56,26 @@ function applyChat(){
   })
  })
 }
-function decorateDeparture(p,meta,finished=false){
- const text=meta?.textContent||'',inactive=text.includes('나감')||finished;p.classList.toggle('departed',inactive);if(!meta)return;
- const plain=text.replace(/\s*·\s*나감\s*/g,' · 나감').trim(),match=plain.match(/(?:^|·\s*)(\d+)위(?:\s*·\s*나감)?$/);meta.querySelector('.finishPlaceBadge')?.remove();
- if(inactive&&match){const badge=document.createElement('span');badge.className='finishPlaceBadge';badge.textContent=`${match[1]}위`;meta.appendChild(badge)}
+function rawMetaText(meta){return [...(meta?.childNodes||[])].filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent||'').join(' ')}
+function decorateInactive(p,meta,gp){
+ if(!meta)return;
+ const raw=rawMetaText(meta),inactive=raw.includes('나감')||!!gp?.finished||!!gp?.finishPlace;
+ p.classList.toggle('departed',inactive);
+ let place=gp?.finishPlace||null;
+ if(!place){const m=raw.match(/(?:^|·\s*)(\d+)위/);if(m)place=Number(m[1])}
+ let badge=meta.querySelector('.finishPlaceBadge');
+ if(inactive&&place){const text=`${place}위`;if(!badge){badge=document.createElement('span');badge.className='finishPlaceBadge';badge.textContent=text;meta.appendChild(badge)}else if(badge.textContent!==text)badge.textContent=text}
+ else if(badge)badge.remove()
 }
-function applyPlayers(){const room=roomByName(),gameByName=new Map((state?.game?.players||[]).map(p=>[p.name,p])),active=$all('#players .player:not(.waiting)');active.forEach((p,i)=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),gp=gameByName.get(name),portraitOwner=rp||gp,inner=ensurePlayerInner(p,portraitOwner),role=inner.querySelector('.role'),pname=inner.querySelector('.pname'),color=gp?colorForId(gp.id):null;if(role){role.textContent=TITLES[i]||`${i+1}위`;if(color)role.style.color=color.accent}if(pname&&color)pname.style.color=color.accent;const meta=inner.querySelector('.pmeta');if(meta&&!meta.querySelector('.miniCards')){const m=meta.textContent.match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}decorateDeparture(p,meta,!!gp?.finished||!!gp?.finishPlace);inner.querySelector('.playerRest')?.remove();const labels=[];if(rp?.resting)labels.push('잠자기');if(rp?.aiPlaying)labels.push('AI 플레이 중');if(labels.length){const s=document.createElement('span');s.className='playerRest';s.textContent=' · '+labels.join(' · ');meta?.appendChild(s)}});$all('#players .player.waiting').forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),inner=ensurePlayerInner(p,rp),pname=inner.querySelector('.pname');if(pname&&rp)pname.style.color=colorForId(rp.id).accent})}
-function apply(){applyLobby();applyPlayers();$all('.card').forEach(card=>{const rank=rankFromCard(card),name=card.querySelector('.name');if(name&&TITLES[rank-1])name.textContent=TITLES[rank-1]});applyChat()}
+function syncPlayerRest(inner,meta,rp){
+ const labels=[];if(rp?.resting)labels.push('잠자기');if(rp?.aiPlaying)labels.push('AI 플레이 중');
+ const text=labels.length?' · '+labels.join(' · '):'',existing=inner.querySelector('.playerRest');
+ if(!text){existing?.remove();return}
+ if(existing){if(existing.textContent!==text)existing.textContent=text;return}
+ const s=document.createElement('span');s.className='playerRest';s.textContent=text;meta?.appendChild(s)
+}
+function applyPlayers(){const room=roomByName(),gameByName=new Map((state?.game?.players||[]).map(p=>[p.name,p])),active=$all('#players .player:not(.waiting)');active.forEach((p,i)=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),gp=gameByName.get(name),portraitOwner=rp||gp,inner=ensurePlayerInner(p,portraitOwner),role=inner.querySelector('.role'),pname=inner.querySelector('.pname'),color=gp?colorForId(gp.id):null,roleText=TITLES[i]||`${i+1}위`;if(role){if(role.textContent!==roleText)role.textContent=roleText;if(color&&role.style.color!==color.accent)role.style.color=color.accent}if(pname&&color&&pname.style.color!==color.accent)pname.style.color=color.accent;const meta=inner.querySelector('.pmeta');if(meta&&!meta.querySelector('.miniCards')){const m=rawMetaText(meta).match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}decorateInactive(p,meta,gp);syncPlayerRest(inner,meta,rp)});$all('#players .player.waiting').forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),inner=ensurePlayerInner(p,rp),pname=inner.querySelector('.pname');if(pname&&rp){const accent=colorForId(rp.id).accent;if(pname.style.color!==accent)pname.style.color=accent}})}
+function apply(){applyLobby();applyPlayers();$all('.card').forEach(card=>{const rank=rankFromCard(card),name=card.querySelector('.name'),text=TITLES[rank-1];if(name&&text&&name.textContent!==text)name.textContent=text});applyChat()}
 let queued=false;function schedule(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;apply()})}
 new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});document.addEventListener('DOMContentLoaded',apply);apply();
 })();
