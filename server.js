@@ -1,7 +1,7 @@
 const http=require('http'),fs=require('fs'),path=require('path'),os=require('os'),crypto=require('crypto');
 const {URL}=require('url');const E=require('./game-engine');
 const PORT=Number(process.env.PORT||3000),HOST='0.0.0.0',PUBLIC=path.join(__dirname,'public'),rooms=new Map(),MAX_PLAYERS=8,MIN_PLAYERS=4;
-const PORTRAITS=new Set(['royal','mage','knight','princess','ninja','bard','fox','owl']),PORTRAIT_IDS=[...PORTRAITS],CUSTOM_PORTRAIT=/^custom:[0-4]\.[0-5]\.[0-5]\.[0-5]\.[0-5]$/;
+const PORTRAITS=new Set(['royal','mage','knight','princess','ninja','bard','fox','owl']),PORTRAIT_IDS=[...PORTRAITS],CUSTOM_PORTRAIT=/^custom:[0-4]\.[0-5]\.[0-5]\.[0-5](?:\.[0-5])?$/;
 const MIME={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8'};
 function cleanName(v){const s=String(v||'').replace(/\s+/g,' ').trim().slice(0,14);if(!s)throw Error('닉네임을 입력해 주세요.');return s}
 function cleanMessage(v){const s=String(v||'').replace(/\s+/g,' ').trim().slice(0,120);if(!s)throw Error('메시지를 입력해 주세요.');return s}
