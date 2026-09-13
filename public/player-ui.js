@@ -18,13 +18,14 @@ function roomColorSlots(){
  return slots
 }
 function colorForId(id){const slots=roomColorSlots(),slot=slots.get(id);return CHAT_COLORS[(slot??0)%CHAT_COLORS.length]}
+window.dalmutiPlayerColor=id=>colorForId(id);
 function playerInfo(){
  const map=new Map(),room=roomById(),game=state?.game?.players||[];
  for(const gp of game){const rp=room.get(gp.id),rank=(gp.roleIndex??0)+1;map.set(gp.id,{id:gp.id,title:gp.role||TITLES[rank-1]||`${rank}위`,rank,portrait:rp?.portrait||gp.portrait||'royal',resting:!!rp?.resting,aiPlaying:!!rp?.aiPlaying,color:colorForId(gp.id)})}
  return map
 }
 function avatarHtml(id,extra='',accent){return `<span class="avatar ${extra}" aria-hidden="true">${window.dalmutiPortraitSvg?.(id,accent)||window.dalmutiPortraitSvg?.('royal',accent)||''}</span>`}
-function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]))}
 function ensurePlayerInner(p,rp){
  let inner=p.querySelector(':scope > .playerInner');
  if(!inner){inner=document.createElement('div');inner.className='playerInner';while(p.firstChild)inner.appendChild(p.firstChild);p.appendChild(inner)}
@@ -60,7 +61,7 @@ function decorateDeparture(p,meta){
  const plain=text.replace(/\s*·\s*나감\s*/g,' · 나감').trim(),match=plain.match(/(?:^|·\s*)(\d+)위(?:\s*·\s*나감)?$/);meta.querySelector('.finishPlaceBadge')?.remove();
  if(departed&&match){const badge=document.createElement('span');badge.className='finishPlaceBadge';badge.textContent=`${match[1]}위`;meta.appendChild(badge)}
 }
-function applyPlayers(){const room=roomByName(),gameByName=new Map((state?.game?.players||[]).map(p=>[p.name,p])),active=$all('#players .player:not(.waiting)');active.forEach((p,i)=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),gp=gameByName.get(name),portraitOwner=rp||gp,inner=ensurePlayerInner(p,portraitOwner),role=inner.querySelector('.role'),pname=inner.querySelector('.pname');if(role)role.textContent=TITLES[i]||`${i+1}위`;if(pname&&gp)pname.style.color=colorForId(gp.id).accent;const meta=inner.querySelector('.pmeta');if(meta&&!meta.querySelector('.miniCards')){const m=meta.textContent.match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}decorateDeparture(p,meta);inner.querySelector('.playerRest')?.remove();const labels=[];if(rp?.resting)labels.push('잠자기');if(rp?.aiPlaying)labels.push('AI 플레이 중');if(labels.length){const s=document.createElement('span');s.className='playerRest';s.textContent=' · '+labels.join(' · ');meta?.appendChild(s)}});$all('#players .player.waiting').forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),inner=ensurePlayerInner(p,rp),pname=inner.querySelector('.pname');if(pname&&rp)pname.style.color=colorForId(rp.id).accent})}
+function applyPlayers(){const room=roomByName(),gameByName=new Map((state?.game?.players||[]).map(p=>[p.name,p])),active=$all('#players .player:not(.waiting)');active.forEach((p,i)=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),gp=gameByName.get(name),portraitOwner=rp||gp,inner=ensurePlayerInner(p,portraitOwner),role=inner.querySelector('.role'),pname=inner.querySelector('.pname'),color=gp?colorForId(gp.id):null;if(role){role.textContent=TITLES[i]||`${i+1}위`;if(color)role.style.color=color.accent}if(pname&&color)pname.style.color=color.accent;const meta=inner.querySelector('.pmeta');if(meta&&!meta.querySelector('.miniCards')){const m=meta.textContent.match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}decorateDeparture(p,meta);inner.querySelector('.playerRest')?.remove();const labels=[];if(rp?.resting)labels.push('잠자기');if(rp?.aiPlaying)labels.push('AI 플레이 중');if(labels.length){const s=document.createElement('span');s.className='playerRest';s.textContent=' · '+labels.join(' · ');meta?.appendChild(s)}});$all('#players .player.waiting').forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),inner=ensurePlayerInner(p,rp),pname=inner.querySelector('.pname');if(pname&&rp)pname.style.color=colorForId(rp.id).accent})}
 function apply(){applyLobby();applyPlayers();$all('.card').forEach(card=>{const rank=rankFromCard(card),name=card.querySelector('.name');if(name&&TITLES[rank-1])name.textContent=TITLES[rank-1]});applyChat()}
 let queued=false;function schedule(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;apply()})}
 new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});document.addEventListener('DOMContentLoaded',apply);apply();
