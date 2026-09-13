@@ -43,7 +43,18 @@ function applyChat(){
   })
  })
 }
-function applyPlayers(){const room=roomByName(),active=$all('#players .player:not(.waiting)');active.forEach((p,i)=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),inner=ensurePlayerInner(p,rp),role=inner.querySelector('.role');if(role)role.textContent=TITLES[i]||`${i+1}위`;const meta=inner.querySelector('.pmeta');if(meta&&!meta.querySelector('.miniCards')){const m=meta.textContent.match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}inner.querySelector('.playerRest')?.remove();const labels=[];if(rp?.resting)labels.push('잠자기');if(rp?.aiPlaying)labels.push('AI 플레이 중');if(labels.length){const s=document.createElement('span');s.className='playerRest';s.textContent=' · '+labels.join(' · ');meta?.appendChild(s)}});$all('#players .player.waiting').forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);ensurePlayerInner(p,rp)})}
+function decorateDeparture(p,meta){
+ const text=meta?.textContent||'',departed=text.includes('나감');
+ p.classList.toggle('departed',departed);
+ if(!meta)return;
+ const plain=text.replace(/\s*·\s*나감\s*/g,' · 나감').trim();
+ const match=plain.match(/(?:^|·\s*)(\d+)위(?:\s*·\s*나감)?$/);
+ meta.querySelector('.finishPlaceBadge')?.remove();
+ if(departed&&match){
+  const badge=document.createElement('span');badge.className='finishPlaceBadge';badge.textContent=`${match[1]}위`;meta.appendChild(badge)
+ }
+}
+function applyPlayers(){const room=roomByName(),active=$all('#players .player:not(.waiting)');active.forEach((p,i)=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name),inner=ensurePlayerInner(p,rp),role=inner.querySelector('.role');if(role)role.textContent=TITLES[i]||`${i+1}위`;const meta=inner.querySelector('.pmeta');if(meta&&!meta.querySelector('.miniCards')){const m=meta.textContent.match(/^(\d+)장/),count=m?Number(m[1]):0;if(m&&count>0)meta.insertAdjacentHTML('afterbegin',miniHand(count))}decorateDeparture(p,meta);inner.querySelector('.playerRest')?.remove();const labels=[];if(rp?.resting)labels.push('잠자기');if(rp?.aiPlaying)labels.push('AI 플레이 중');if(labels.length){const s=document.createElement('span');s.className='playerRest';s.textContent=' · '+labels.join(' · ');meta?.appendChild(s)}});$all('#players .player.waiting').forEach(p=>{const name=(p.querySelector('.pname')?.textContent||'').replace(/\s*\(나\)\s*$/,'').trim(),rp=room.get(name);ensurePlayerInner(p,rp)})}
 function apply(){applyPlayers();$all('.card').forEach(card=>{const rank=rankFromCard(card),name=card.querySelector('.name');if(name&&TITLES[rank-1])name.textContent=TITLES[rank-1]});applyChat()}
 let queued=false;function schedule(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;apply()})}
 new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});document.addEventListener('DOMContentLoaded',apply);apply();
