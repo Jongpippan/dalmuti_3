@@ -7,7 +7,7 @@ toast=function(message){
   redirecting=true;
   resetToHome();
   redirecting=false;
-  originalToast('방을 찾을 수 없습니다. 메인 화면으로 돌아왔습니다.');
+  originalToast('방이 종료되어 메인 화면으로 돌아왔습니다.');
   return
  }
  originalToast(message)
