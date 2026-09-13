@@ -47,7 +47,7 @@ function renderStateUi(){
  if(!game||!pile||!s?.game)return;
  const owner=ensurePileOverlay(pile),g=s.game,cur=g.players?.find(p=>p.id===g.currentPlayerId),myTurn=g.phase==='play'&&g.currentPlayerId===s.viewerId,myTax=g.phase==='tax'&&!!g.tax?.pending;
  game.classList.toggle('myTurn',!!myTurn);game.classList.toggle('taxPhase',g.phase==='tax');game.classList.toggle('myTaxTurn',!!myTax);
- if(status){status.classList.toggle('hidden',g.phase==='play');status.classList.remove('myTurnStatus');status.classList.toggle('taxActionStatus',!!myTax);status.classList.toggle('taxWaitingStatus',g.phase==='tax'&&!myTax);if(g.phase==='tax')setText(status,taxText(g,s))}
+ if(status){status.classList.toggle('hidden',!!myTurn);status.classList.remove('myTurnStatus');status.classList.toggle('taxActionStatus',!!myTax);status.classList.toggle('taxWaitingStatus',g.phase==='tax'&&!myTax);if(g.phase==='tax')setText(status,taxText(g,s))}
  if(handStatus){setText(handStatus,myTurn?'내 차례입니다.':'');handStatus.classList.toggle('hidden',!myTurn)}
  let ownerText='',ownerClass='pileOwner',ownerColor='';
  if(g.pile){ownerText=`${g.pile.playerName} 제출`;ownerClass='pileOwner pileOwnerSubmitted';ownerColor=playerColor(g.pile.playerId)}
