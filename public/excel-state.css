@@ -1,0 +1,19 @@
+/* High-signal state cues using only Excel green + black */
+.player.turn{position:relative!important;outline:2px solid #217346!important;outline-offset:-2px!important;background:#fff!important}
+.player.turn::after{content:'CURRENT';position:absolute;right:5px;top:4px;padding:1px 4px;background:#217346;color:#fff;font:600 7px/1.4 "Segoe UI",sans-serif;letter-spacing:.04em}
+.player.turn .playerInner{background:#f3f8f5!important}
+.player.me.turn{outline:3px solid #111!important;box-shadow:inset 0 0 0 2px #217346!important;background:#fff!important}
+.player.me.turn::after{content:'MY TURN';background:#111;color:#fff;border-left:4px solid #217346;padding-left:6px}
+.myTurn .handDock{border-top:3px solid #111!important;box-shadow:inset 0 3px 0 #217346!important}
+.myTurn .handStatus{background:#111!important;color:#fff!important;border:0!important;border-left:6px solid #217346!important;padding:5px 10px!important;font-weight:700!important;letter-spacing:.02em}
+.myTurn #dropZone{border:2px solid #217346!important;box-shadow:none!important}
+.turnTimer{display:inline-flex;align-items:center;justify-content:center;min-width:74px;height:26px;padding:0 7px;border:1px solid #217346;background:#fff;color:#185c37;font:600 10px/1 "Segoe UI",sans-serif;white-space:nowrap}
+.turnTimer.mine{background:#111;color:#fff;border-color:#111;box-shadow:inset 4px 0 0 #217346}
+.turnTimer.urgent{background:#217346;color:#fff;border-color:#185c37}
+.turnTimer.mine.urgent{background:#111;color:#fff;box-shadow:inset 7px 0 0 #217346}
+/* Dalmuti submit: Excel selection/status notification, no game-like flash */
+.dalmutiFlash::before{display:block!important;content:''!important;position:fixed!important;inset:0!important;z-index:9998!important;pointer-events:none!important;background:transparent!important;box-shadow:inset 0 0 0 4px #217346!important;animation:excelSelectionFlash 1.25s ease-out forwards!important}
+.dalmutiFlash::after{display:block!important;content:var(--dalmuti-label)!important;position:fixed!important;left:50%!important;top:8px!important;transform:translateX(-50%)!important;z-index:9999!important;pointer-events:none!important;padding:5px 12px!important;border:1px solid #111!important;border-left:7px solid #217346!important;border-radius:0!important;background:#fff!important;color:#111!important;font:600 11px/1.3 "Segoe UI",sans-serif!important;letter-spacing:0!important;box-shadow:0 2px 5px rgba(0,0,0,.14)!important;animation:excelNotice 1.25s ease-out forwards!important}
+@keyframes excelSelectionFlash{0%{opacity:0}14%{opacity:1}78%{opacity:1}100%{opacity:0}}
+@keyframes excelNotice{0%{opacity:0;transform:translate(-50%,-4px)}12%{opacity:1;transform:translate(-50%,0)}78%{opacity:1}100%{opacity:0;transform:translate(-50%,-2px)}}
+@media(max-width:540px){.player.turn::after{right:3px;top:3px;font-size:6px}.turnTimer{min-width:62px;height:22px;padding:0 5px;font-size:8px}.dalmutiFlash::after{top:5px;font-size:9px;padding:4px 8px}.myTurn .handStatus{padding:4px 8px!important}}
