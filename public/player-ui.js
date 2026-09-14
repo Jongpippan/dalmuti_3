@@ -1,16 +1,16 @@
 (()=>{
 const TITLES=['달무티','총리대신','시종장','남작부인','수녀원장','기사','재봉사','석공','요리사','양치기','광부','농노','광대'];
 const CHAT_COLORS=[
- {accent:'#60a5fa',bg:'rgba(37,99,235,.14)'},
- {accent:'#fbbf24',bg:'rgba(217,119,6,.14)'},
- {accent:'#f472b6',bg:'rgba(219,39,119,.14)'},
- {accent:'#22d3ee',bg:'rgba(8,145,178,.14)'},
- {accent:'#fb923c',bg:'rgba(234,88,12,.14)'},
- {accent:'#a78bfa',bg:'rgba(124,58,237,.14)'},
- {accent:'#a3e635',bg:'rgba(101,163,13,.14)'},
- {accent:'#f87171',bg:'rgba(220,38,38,.14)'},
- {accent:'#2dd4bf',bg:'rgba(13,148,136,.14)'},
- {accent:'#e879f9',bg:'rgba(192,38,211,.14)'}
+ {accent:'#44546a',bg:'rgba(68,84,106,.065)'},
+ {accent:'#7a6d4e',bg:'rgba(122,109,78,.065)'},
+ {accent:'#7b5b62',bg:'rgba(123,91,98,.065)'},
+ {accent:'#4f6d6a',bg:'rgba(79,109,106,.065)'},
+ {accent:'#806b55',bg:'rgba(128,107,85,.065)'},
+ {accent:'#665c73',bg:'rgba(102,92,115,.065)'},
+ {accent:'#687151',bg:'rgba(104,113,81,.065)'},
+ {accent:'#805f5a',bg:'rgba(128,95,90,.065)'},
+ {accent:'#5f6f7a',bg:'rgba(95,111,122,.065)'},
+ {accent:'#75616e',bg:'rgba(117,97,110,.065)'}
 ];
 const $all=s=>[...document.querySelectorAll(s)];
 const colorSlotsByRoom=new Map();
