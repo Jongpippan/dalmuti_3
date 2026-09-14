@@ -1,8 +1,8 @@
 (()=>{
-let q=false,lastDalmutiKey='',lastHandIds=new Set(),lastTaxHand=0;
+let q=false,lastDalmutiKey='',lastHandIds=new Set(),lastTaxHand=0,timerInterval=null;
 function playerName(g,id){return g.players?.find(p=>p.id===id)?.name||''}
-function playerColor(id){return window.dalmutiPlayerColor?.(id)?.accent||'#60a5fa'}
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function playerColor(id){return window.dalmutiPlayerColor?.(id)?.accent||'#217346'}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]))}
 function setText(el,text){if(el&&el.textContent!==text)el.textContent=text}
 function taxText(g,s){
  const p=g.tax?.pending;
@@ -14,6 +14,23 @@ function ensurePileOverlay(pile){
  let overlay=pile.querySelector(':scope > .pileOverlay');
  if(!overlay){overlay=document.createElement('span');overlay.className='pileOverlay';overlay.innerHTML='<span>현재 묶음</span><strong id="pileOwner"></strong>';pile.append(overlay)}
  return overlay.querySelector('#pileOwner')
+}
+function ensureTurnTimer(){
+ const head=document.querySelector('#game .gameHead .headActions');if(!head)return null;
+ let el=head.querySelector('#turnTimer');if(!el){el=document.createElement('span');el.id='turnTimer';el.className='turnTimer hidden';head.insertBefore(el,head.firstChild)}return el
+}
+function renderTurnTimer(){
+ let s=null;try{s=state}catch{}const el=ensureTurnTimer();if(!el)return;
+ const g=s?.game,deadline=Number(g?.turnDeadline||0),active=g?.phase==='play'&&deadline>0&&g?.currentPlayerId;
+ el.classList.toggle('hidden',!active);if(!active)return;
+ const sec=Math.max(0,Math.ceil((deadline-Date.now())/1000)),mine=g.currentPlayerId===s.viewerId;
+ setText(el,`${mine?'내 차례':'남은 시간'} ${sec}초`);el.classList.toggle('mine',mine);el.classList.toggle('urgent',sec<=10)
+}
+function syncTimerLoop(){
+ const active=!!state?.game?.turnDeadline&&state?.game?.phase==='play';
+ if(active&&!timerInterval)timerInterval=setInterval(renderTurnTimer,250);
+ else if(!active&&timerInterval){clearInterval(timerInterval);timerInterval=null}
+ renderTurnTimer()
 }
 function renderWaitingPlayers(s){
  const players=document.querySelector('#players');if(!players)return;
@@ -36,10 +53,9 @@ function flashDalmuti(g,game){
  const line=g.logs?.at(-1)||'';
  if(!line.includes('달무티 카드는 자동으로 선을 먹습니다.'))return;
  const key=`${g.handNumber}:${g.logs.length}:${line}`;if(key===lastDalmutiKey)return;lastDalmutiKey=key;
- const re=/^(.*?)이\(가\) 달무티 \d+장을 냈습니다\.$/,playLine=[...(g.logs||[])].reverse().find(x=>re.test(x))||'',m=playLine.match(re),name=m?.[1]||'플레이어',player=g.players?.find(p=>p.name===name),accent=playerColor(player?.id);
- game.style.setProperty('--dalmuti-label',`"${String(name).replace(/["\\]/g,'')}가 달무티 제출!"`);
- game.style.setProperty('--dalmuti-accent',accent);
- game.classList.remove('dalmutiFlash');void game.offsetWidth;game.classList.add('dalmutiFlash');setTimeout(()=>game.classList.remove('dalmutiFlash'),1100)
+ const re=/^(.*?)이\(가\) 달무티 \d+장을 냈습니다\.$/,playLine=[...(g.logs||[])].reverse().find(x=>re.test(x))||'',m=playLine.match(re),name=m?.[1]||'플레이어';
+ game.style.setProperty('--dalmuti-label',`"${String(name).replace(/["\\]/g,'')} · 달무티 제출"`);
+ game.classList.remove('dalmutiFlash');void game.offsetWidth;game.classList.add('dalmutiFlash');setTimeout(()=>game.classList.remove('dalmutiFlash'),1300)
 }
 function renderStateUi(){
  let s=null;try{s=state}catch{}
@@ -54,7 +70,7 @@ function renderStateUi(){
  else if(g.phase==='play'&&cur){ownerText=`${cur.name} 선`;ownerClass='pileOwner pileOwnerLead';ownerColor=playerColor(cur.id)}
  setText(owner,ownerText);if(owner.className!==ownerClass)owner.className=ownerClass;
  if(ownerColor){if(owner.style.getPropertyValue('--pile-owner-color')!==ownerColor)owner.style.setProperty('--pile-owner-color',ownerColor)}else if(owner.style.getPropertyValue('--pile-owner-color'))owner.style.removeProperty('--pile-owner-color');
- renderWaitingPlayers(s);flashReceivedCards(g,s);flashDalmuti(g,game)
+ renderWaitingPlayers(s);flashReceivedCards(g,s);flashDalmuti(g,game);syncTimerLoop()
 }
 function schedule(){if(q)return;q=true;requestAnimationFrame(()=>{q=false;renderStateUi()})}
 new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});
