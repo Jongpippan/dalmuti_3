@@ -1,0 +1,11 @@
+/* Keep the spreadsheet shell subdued, but make playable cards clearly readable. */
+.card,.fanHand .card,.pile .card{background:#2f3133!important;color:#fff!important;border:1px solid #1f2022!important;box-shadow:0 1px 2px rgba(0,0,0,.18)!important}
+.card .num,.fanHand .card .num,.pile .card .num{color:#fff!important;font-weight:700!important}
+.card .name,.fanHand .card .name,.pile .card .name{color:#d9d9d9!important;font-weight:600!important}
+.card .cornerRank,.fanHand .card .cornerRank,.pile .card .cornerRank{color:#fff!important}
+.card.jester,.fanHand .card.jester,.pile .card.jester{background:#17181a!important;color:#fff!important;border-color:#0f1011!important}
+.card.jester .name,.fanHand .card.jester .name,.pile .card.jester .name{color:#c9c9c9!important}
+.card:hover:not(:disabled),.fanHand .card:hover:not(:disabled){background:#3a3d40!important;border-color:#111!important;color:#fff!important}
+.card.selected,.fanHand .card.selected{background:#254d38!important;border:2px solid #217346!important;outline:2px solid #111!important;outline-offset:1px!important;box-shadow:none!important}
+.card:disabled,.pile .card:disabled{opacity:1!important}
+@media(max-width:540px){.card,.fanHand .card,.pile .card{box-shadow:none!important}}
