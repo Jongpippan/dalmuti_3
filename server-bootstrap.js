@@ -25,12 +25,6 @@ replaceOnce(
 );
 
 replaceOnce(
-  'human activity auth',
-  "function auth(p) {\n  const r = getRoom(p.roomCode);\n  const u = r.players.find(x => x.id === p.playerId && x.token === p.reconnectToken);\n  if (!u) throw Error('재접속 정보가 올바르지 않습니다.');\n  return { r, u };\n}",
-  "function auth(p) {\n  const r = getRoom(p.roomCode);\n  const u = r.players.find(x => x.id === p.playerId && x.token === p.reconnectToken);\n  if (!u) throw Error('재접속 정보가 올바르지 않습니다.');\n  if (!u.bot) r.lastHumanActivityAt = Date.now();\n  return { r, u };\n}"
-);
-
-replaceOnce(
   'room state word settings',
   "      selectedGame: r.selectedGame || 'dalmuti',\n      gameType: started ? r.gameType : null,",
   "      selectedGame: r.selectedGame || 'dalmuti',\n      wordDifficulty: r.wordDifficulty || 'normal',\n      wordAutoRestartAt: r.wordAutoRestartAt || null,\n      gameType: started ? r.gameType : null,"
@@ -45,7 +39,7 @@ replaceOnce(
 replaceOnce(
   'schedule restart on emit',
   "function emit(r) {\n",
-  "function emit(r) {\n  r.lastHumanActivityAt = Date.now();\n  scheduleWordRestart(r);\n"
+  "function emit(r) {\n  scheduleWordRestart(r);\n"
 );
 
 replaceOnce(
@@ -91,9 +85,15 @@ replaceOnce(
 );
 
 replaceOnce(
+  'human action activity',
+  "    if (req.method === 'POST' && u.pathname === '/api/action') {\n      const p = await body(req), fn = A[p.type];\n      if (!fn) throw Error('알 수 없는 요청입니다.');\n      return json(res, 200, { ok: true, ...fn(p) });\n    }",
+  "    if (req.method === 'POST' && u.pathname === '/api/action') {\n      const p = await body(req), fn = A[p.type];\n      if (!fn) throw Error('알 수 없는 요청입니다.');\n      if (p.type !== 'reconnect-session' && p.roomCode && p.playerId && p.reconnectToken) {\n        try {\n          const activityRoom = rooms.get(cleanCode(p.roomCode));\n          const actor = activityRoom?.players.find(x => x.id === p.playerId && x.token === p.reconnectToken);\n          if (actor && !actor.bot) activityRoom.lastHumanActivityAt = Date.now();\n        } catch {}\n      }\n      return json(res, 200, { ok: true, ...fn(p) });\n    }"
+);
+
+replaceOnce(
   'idle room cleanup',
   "const server = http.createServer(async (req, res) => {",
-  "const idleRoomSweep = setInterval(() => {\n  const now = Date.now();\n  for (const r of [...rooms.values()]) {\n    if (now - Number(r.lastHumanActivityAt || now) < ROOM_IDLE_MS) continue;\n    clearGameTimers(r);\n    for (const p of r.players) {\n      if (!p.stream) continue;\n      try { sse(p.stream, 'kicked', { message: '5분 동안 활동이 없어 방이 자동으로 종료되었습니다.' }); } catch {}\n      try { p.stream.end(); } catch {}\n      p.stream = null;\n    }\n    rooms.delete(r.code);\n  }\n}, 60_000);\nif (typeof idleRoomSweep.unref === 'function') idleRoomSweep.unref();\n\nconst server = http.createServer(async (req, res) => {"
+  "const idleRoomSweep = setInterval(() => {\n  const now = Date.now();\n  for (const r of [...rooms.values()]) {\n    if (now - Number(r.lastHumanActivityAt || now) < ROOM_IDLE_MS) continue;\n    clearGameTimers(r);\n    for (const p of r.players) {\n      if (!p.stream) continue;\n      try { sse(p.stream, 'kicked', { message: '5분 동안 사람의 입력이 없어 방이 자동으로 종료되었습니다.' }); } catch {}\n      try { p.stream.end(); } catch {}\n      p.stream = null;\n    }\n    rooms.delete(r.code);\n  }\n}, 60_000);\nif (typeof idleRoomSweep.unref === 'function') idleRoomSweep.unref();\n\nconst server = http.createServer(async (req, res) => {"
 );
 
 const patched = new Module(filename, module);
