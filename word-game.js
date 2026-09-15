@@ -119,12 +119,12 @@ function remainingChoseongCount(game) {
 function randomPrompt(previous = '', usedWords = []) {
   if (!promptPool.length) return 'ㅅㄱ';
   const used = usedWords instanceof Set ? usedWords : new Set(usedWords || []);
-  const candidates = promptPool.filter(prompt =>
-    prompt !== previous && (choseongWords.get(prompt) || []).some(word => !used.has(word))
-  ));
-  const fallback = promptPool.filter(prompt =>
-    (choseongWords.get(prompt) || []).some(word => !used.has(word))
-  ));
+  const hasUnusedWord = prompt => {
+    const words = choseongWords.get(prompt) || [];
+    return words.some(word => !used.has(word));
+  };
+  const candidates = promptPool.filter(prompt => prompt !== previous && hasUnusedWord(prompt));
+  const fallback = promptPool.filter(hasUnusedWord);
   const pool = candidates.length ? candidates : fallback.length ? fallback : promptPool;
   return pool[Math.floor(Math.random() * pool.length)];
 }
