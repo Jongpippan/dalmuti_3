@@ -1,4 +1,3 @@
-const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 
@@ -7,41 +6,39 @@ const DATA_DIR = path.join(ROOT, 'data');
 const TARGET = path.join(DATA_DIR, 'kr_korean.csv');
 const OPTIONAL = process.argv.includes('--optional');
 const FORCE = process.argv.includes('--force');
-const MIN_BYTES = 5_000_000;
+const MARKER = '# common-nouns-v1,한국어 학습용 어휘';
+const MIN_WORDS = 1500;
 
-// Canonical source published by korean-word-game/db.
 const SOURCES = [
   {
-    name: 'korean-word-game/db (Google Drive)',
-    url: 'https://drive.usercontent.google.com/download?id=1PdzYubqcPKAIsHRtWZEFdQ1m4-fba6Oj&export=download&confirm=t'
+    name: 'pd-korean-noun-list-for-wordles (jsDelivr)',
+    url: 'https://cdn.jsdelivr.net/npm/pd-korean-noun-list-for-wordles@0.4.0/src/CommonNouns.js'
   },
   {
-    // Public GitHub mirror of the same kr_korean.csv. This is only a transport fallback
-    // for environments where Google Drive blocks non-browser downloads.
-    name: 'GitHub mirror of kr_korean.csv',
-    url: 'https://raw.githubusercontent.com/isaac7778/word-chain-korean/master/kr_korean.csv'
+    name: 'pd-korean-noun-list-for-wordles (GitHub)',
+    url: 'https://raw.githubusercontent.com/han-dle/pd-korean-noun-list-for-wordles/main/src/CommonNouns.js'
   }
 ];
 
-function looksLikeDictionary(buffer) {
-  if (!buffer || buffer.length < MIN_BYTES) return false;
-  const sample = buffer.subarray(0, Math.min(buffer.length, 128 * 1024)).toString('utf8').replace(/^\uFEFF/, '');
-  return sample.includes(',') && /[가-힣]{2,}/.test(sample);
+function extractWords(text) {
+  const words = [];
+  const seen = new Set();
+  const re = /'([가-힣]{2,})'/g;
+  let match;
+  while ((match = re.exec(text))) {
+    const word = match[1].normalize('NFC');
+    if (seen.has(word)) continue;
+    seen.add(word);
+    words.push(word);
+  }
+  return words;
 }
 
 async function existingIsUsable() {
   try {
-    const stat = await fsp.stat(TARGET);
-    if (!stat.isFile() || stat.size < MIN_BYTES) return false;
-    const handle = await fsp.open(TARGET, 'r');
-    try {
-      const sample = Buffer.alloc(128 * 1024);
-      const { bytesRead } = await handle.read(sample, 0, sample.length, 0);
-      const text = sample.subarray(0, bytesRead).toString('utf8').replace(/^\uFEFF/, '');
-      return text.includes(',') && /[가-힣]{2,}/.test(text);
-    } finally {
-      await handle.close();
-    }
+    const text = await fsp.readFile(TARGET, 'utf8');
+    if (!text.startsWith(MARKER)) return false;
+    return text.split(/\r?\n/).length >= MIN_WORDS;
   } catch {
     return false;
   }
@@ -49,19 +46,18 @@ async function existingIsUsable() {
 
 async function download(source) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
+  const timer = setTimeout(() => controller.abort(), 30_000);
   try {
     const response = await fetch(source.url, {
       redirect: 'follow',
       signal: controller.signal,
-      headers: { 'User-Agent': 'dalmuti-multigame-word-db-setup/1.0' }
+      headers: { 'User-Agent': 'dalmuti-multigame-common-word-db/2.0' }
     });
     if (!response.ok) throw Error(`HTTP ${response.status}`);
-    const type = String(response.headers.get('content-type') || '').toLowerCase();
-    if (type.includes('text/html')) throw Error('HTML 응답이 반환되었습니다.');
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (!looksLikeDictionary(buffer)) throw Error(`사전 파일 형식이 올바르지 않습니다. (${buffer.length.toLocaleString()} bytes)`);
-    return buffer;
+    const text = await response.text();
+    const words = extractWords(text);
+    if (words.length < MIN_WORDS) throw Error(`일반 어휘를 충분히 읽지 못했습니다. (${words.length.toLocaleString()}개)`);
+    return words;
   } finally {
     clearTimeout(timer);
   }
@@ -69,7 +65,7 @@ async function download(source) {
 
 async function main() {
   if (!FORCE && await existingIsUsable()) {
-    console.log('[word-db] data/kr_korean.csv already exists.');
+    console.log('[word-db] Common Korean noun DB already exists.');
     return;
   }
 
@@ -78,12 +74,13 @@ async function main() {
 
   for (const source of SOURCES) {
     try {
-      console.log(`[word-db] Downloading from ${source.name}...`);
-      const buffer = await download(source);
+      console.log(`[word-db] Downloading common Korean nouns from ${source.name}...`);
+      const words = await download(source);
+      const csv = [MARKER, '낱말,품사', ...words.map(word => `${word},명사`), ''].join('\n');
       const temp = `${TARGET}.tmp-${process.pid}`;
-      await fsp.writeFile(temp, buffer);
+      await fsp.writeFile(temp, csv, 'utf8');
       await fsp.rename(temp, TARGET);
-      console.log(`[word-db] Saved ${path.relative(ROOT, TARGET)} (${buffer.length.toLocaleString()} bytes).`);
+      console.log(`[word-db] Saved ${path.relative(ROOT, TARGET)} (${words.length.toLocaleString()} common words).`);
       return;
     } catch (error) {
       lastError = error;
@@ -91,11 +88,11 @@ async function main() {
     }
   }
 
-  throw lastError || Error('kr_korean.csv를 다운로드하지 못했습니다.');
+  throw lastError || Error('일반 한국어 단어 목록을 다운로드하지 못했습니다.');
 }
 
 main().catch(error => {
-  const message = `[word-db] ${error.message}\n[word-db] 원본: https://github.com/korean-word-game/db`;
+  const message = `[word-db] ${error.message}\n[word-db] source: https://github.com/han-dle/pd-korean-noun-list-for-wordles`;
   if (OPTIONAL) {
     console.warn(`${message}\n[word-db] 설치는 계속합니다. 서버 실행 전 npm run setup:word-db 를 실행해 주세요.`);
     process.exitCode = 0;
