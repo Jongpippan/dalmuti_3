@@ -2,7 +2,7 @@
 const META={
  dalmuti:{name:'대 달무티',icon:'♛',desc:'계급이 뒤집히는 4–8인 카드게임',min:4,max:8},
  choseong:{name:'초성게임',icon:'ㄱ',desc:'한 초성으로 돌아가며 겹치지 않는 단어를 내는 생존전',min:2,max:20},
- wordchain:{name:'끝',desc:'앞 단어의 마지막 글자로 이어가는 생존전',min:2,max:20}
+ wordchain:{name:'끝말잇기',icon:'끝',desc:'앞 단어의 마지막 글자로 이어가는 생존전',min:2,max:20}
 };
 const originalGame=game;
 const originalLoadRooms=loadRooms;
