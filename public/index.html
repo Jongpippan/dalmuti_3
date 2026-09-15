@@ -49,6 +49,7 @@
     <section class="panel lobbyPanel gamePickerPanel">
       <div class="gamePickerHead"><div><small>이번에 할 게임</small><h2 id="selectedGameName">대 달무티</h2></div><span class="hostOnlyNote">방장이 선택</span></div>
       <div id="lobbyGamePicker" class="gameGrid"></div>
+      <div id="lobbyChoseongDifficulty" class="difficultyPanel hidden"></div>
       <p id="gameRequirement" class="hint"></p>
     </section>
     <div class="panel lobbyPanel"><h2>참가자</h2><div id="lobbyPlayers"></div><p class="hint">게임을 고른 뒤 방장이 시작합니다.</p></div>
@@ -89,6 +90,7 @@
   <dialog id="gameSwitchDialog" class="gameSwitchDialog">
     <div class="gameSwitchHead"><div><small>방장 기능</small><h2>게임 바꾸기</h2></div><button id="closeGameSwitch" class="tiny" type="button">닫기</button></div>
     <p>다른 게임으로 전환하거나, 종료된 게임을 같은 게임으로 다시 시작할 수 있습니다.</p>
+    <div id="switchChoseongDifficulty" class="difficultyPanel"></div>
     <div id="switchGamePicker" class="gameGrid"></div>
   </dialog>
   <div id="toast" aria-live="polite"></div>
