@@ -1,9 +1,12 @@
 {
   "name": "great-dalmuti-local",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "4-8 player local realtime card game",
+  "description": "2-8 player local realtime party game room",
   "scripts": {
+    "setup:word-db": "node scripts/setup-word-db.js",
+    "postinstall": "node scripts/setup-word-db.js --optional",
+    "prestart": "node scripts/setup-word-db.js",
     "start": "node server.js",
     "test": "node test.js"
   },

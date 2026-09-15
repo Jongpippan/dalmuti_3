@@ -1,0 +1,4 @@
+node_modules/
+data/kr_korean.csv
+data/kr_korean.csv.tmp-*
+.DS_Store
