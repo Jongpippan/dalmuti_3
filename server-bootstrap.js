@@ -15,7 +15,7 @@ function replaceOnce(label, from, to) {
 replaceOnce(
   'word constants',
   "const WORD_TURN_LIMIT_MS = 15000;",
-  "const WORD_TURN_LIMIT_MS = 15000;\nconst WORD_AUTO_RESTART_MS = 8000;\nconst ROOM_IDLE_MS = 60 * 60 * 1000;\nconst WORD_DIFFICULTIES = new Set(['easy', 'normal', 'hard']);"
+  "const WORD_TURN_LIMIT_MS = 15000;\nconst WORD_AUTO_RESTART_MS = 8000;\nconst ROOM_IDLE_MS = 5 * 60 * 1000;\nconst WORD_DIFFICULTIES = new Set(['easy', 'normal', 'hard']);"
 );
 
 replaceOnce(
@@ -93,7 +93,7 @@ replaceOnce(
 replaceOnce(
   'idle room cleanup',
   "const server = http.createServer(async (req, res) => {",
-  "const idleRoomSweep = setInterval(() => {\n  const now = Date.now();\n  for (const r of [...rooms.values()]) {\n    if (now - Number(r.lastHumanActivityAt || now) < ROOM_IDLE_MS) continue;\n    clearGameTimers(r);\n    for (const p of r.players) {\n      if (!p.stream) continue;\n      try { sse(p.stream, 'kicked', { message: '1시간 동안 활동이 없어 방이 자동으로 종료되었습니다.' }); } catch {}\n      try { p.stream.end(); } catch {}\n      p.stream = null;\n    }\n    rooms.delete(r.code);\n  }\n}, 60_000);\nif (typeof idleRoomSweep.unref === 'function') idleRoomSweep.unref();\n\nconst server = http.createServer(async (req, res) => {"
+  "const idleRoomSweep = setInterval(() => {\n  const now = Date.now();\n  for (const r of [...rooms.values()]) {\n    if (now - Number(r.lastHumanActivityAt || now) < ROOM_IDLE_MS) continue;\n    clearGameTimers(r);\n    for (const p of r.players) {\n      if (!p.stream) continue;\n      try { sse(p.stream, 'kicked', { message: '5분 동안 활동이 없어 방이 자동으로 종료되었습니다.' }); } catch {}\n      try { p.stream.end(); } catch {}\n      p.stream = null;\n    }\n    rooms.delete(r.code);\n  }\n}, 60_000);\nif (typeof idleRoomSweep.unref === 'function') idleRoomSweep.unref();\n\nconst server = http.createServer(async (req, res) => {"
 );
 
 const patched = new Module(filename, module);
