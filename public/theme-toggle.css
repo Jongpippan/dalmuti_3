@@ -1,0 +1,8 @@
+[data-theme-toggle]{white-space:nowrap}
+.heroThemeRow{display:flex;justify-content:flex-end;margin:-2px 0 8px}
+.heroThemeRow [data-theme-toggle]{width:auto;margin:0}
+.screen>header [data-theme-toggle]{width:auto;margin:0 0 0 6px}
+html[data-excel-theme="off"] .turnTimer{display:inline-flex;align-items:center;justify-content:center;min-width:74px;height:26px;padding:0 7px;border:1px solid #3f3f46;background:#18181b;color:#e4e4e7;border-radius:8px;font:700 10px/1 Inter,ui-sans-serif,system-ui,sans-serif;white-space:nowrap}
+html[data-excel-theme="off"] .turnTimer.mine{background:#172554;border-color:#2563eb;color:#dbeafe}
+html[data-excel-theme="off"] .turnTimer.urgent{background:#450a0a;border-color:#991b1b;color:#fecaca}
+@media(max-width:540px){.heroThemeRow{margin:0 0 6px}.heroThemeRow [data-theme-toggle],.screen>header [data-theme-toggle]{font-size:8px;padding:3px 5px;min-height:24px}.screen>header [data-theme-toggle]{margin-left:4px}html[data-excel-theme="off"] .turnTimer{min-width:62px;height:22px;padding:0 5px;font-size:8px}}
