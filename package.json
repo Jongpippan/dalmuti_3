@@ -1,11 +1,14 @@
 {
   "name": "great-dalmuti-local",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "4-8 player local realtime card game",
+  "description": "2-8 player local realtime party game room",
   "scripts": {
     "start": "node server.js",
     "test": "node test.js"
+  },
+  "dependencies": {
+    "pd-korean-noun-list-for-wordles": "0.4.0"
   },
   "engines": {
     "node": ">=18"
