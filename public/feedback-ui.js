@@ -12,4 +12,9 @@ document.addEventListener('click',e=>{
  if(target.id==='join'){const room=roomInput();if(!room?.value.trim()){fail('방 코드를 입력해 주세요.',room,e);return}}
 },true);
 document.addEventListener('input',e=>{if(e.target.matches?.('#name,#roomCode'))e.target.classList.remove('inputError')},true);
+function loadThemeToggle(){
+ if(!document.querySelector('link[href="theme-toggle.css"]')){const l=document.createElement('link');l.rel='stylesheet';l.href='theme-toggle.css';document.head.appendChild(l)}
+ if(!document.querySelector('script[src="theme-toggle.js"]')){const s=document.createElement('script');s.src='theme-toggle.js';document.body.appendChild(s)}
+}
+loadThemeToggle();
 })();
