@@ -105,13 +105,27 @@ const promptPool = dictionary.prompts;
 const choseongWords = dictionary.choseongWords;
 const startWords = dictionary.startWords;
 
-function randomPrompt(previous = '') {
+function unusedChoseongWords(prompt, usedWords) {
+  const used = usedWords instanceof Set ? usedWords : new Set(usedWords || []);
+  return (choseongWords.get(prompt) || []).filter(word => !used.has(word));
+}
+
+function remainingChoseongCount(game) {
+  if (!game || game.type !== 'choseong' || !game.prompt) return 0;
+  return unusedChoseongWords(game.prompt, game.usedWords).length;
+}
+
+function randomPrompt(previous = '', usedWords = []) {
   if (!promptPool.length) return 'ㅅㄱ';
-  for (let i = 0; i < 12; i++) {
-    const next = promptPool[Math.floor(Math.random() * promptPool.length)];
-    if (next && next !== previous) return next;
-  }
-  return promptPool[Math.floor(Math.random() * promptPool.length)];
+  const used = usedWords instanceof Set ? usedWords : new Set(usedWords || []);
+  const candidates = promptPool.filter(prompt =>
+    prompt !== previous && (choseongWords.get(prompt) || []).some(word => !used.has(word))
+  );
+  const fallback = promptPool.filter(prompt =>
+    (choseongWords.get(prompt) || []).some(word => !used.has(word)
+  );
+  const pool = candidates.length ? candidates : fallback.length ? fallback : promptPool;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function createGame(type, roomPlayers, options = {}) {
@@ -145,7 +159,9 @@ function createGame(type, roomPlayers, options = {}) {
     usedWords: [],
     history: [],
     winnerId: null,
-    turnNumber: 1
+    turnNumber: 1,
+    roundNumber: type === 'choseong' ? 1 : null,
+    consecutiveFailedPlayerIds: []
   };
 }
 
@@ -182,7 +198,30 @@ function advance(game, previousId) {
   const next = nextPlayer(game, previousId);
   game.currentPlayerId = next?.id || null;
   game.turnNumber += 1;
-  if (game.type === 'choseong') game.prompt = randomPrompt(game.prompt);
+}
+
+function startNextChoseongRound(game, reason = 'all_failed') {
+  if (!game || game.type !== 'choseong' || game.status !== 'playing') return false;
+  const previous = game.prompt;
+  game.prompt = randomPrompt(previous, game.usedWords);
+  game.roundNumber = (game.roundNumber || 1) + 1;
+  game.consecutiveFailedPlayerIds = [];
+  game.history.push({
+    type: 'round',
+    roundNumber: game.roundNumber,
+    prompt: game.prompt,
+    reason,
+    at: Date.now()
+  });
+  if (game.history.length > 80) game.history.splice(0, game.history.length - 80);
+  return true;
+}
+
+function allActivePlayersFailed(game) {
+  if (!game || game.type !== 'choseong') return false;
+  const failed = new Set(game.consecutiveFailedPlayerIds || []);
+  const active = activePlayers(game);
+  return active.length > 0 && active.every(player => failed.has(player.id));
 }
 
 function validateCommon(game, word) {
@@ -211,9 +250,13 @@ function submit(game, playerId, rawWord) {
   game.usedWords.push(word);
   game.lastWord = word;
   player.score += 1;
+  if (game.type === 'choseong') game.consecutiveFailedPlayerIds = [];
   game.history.push({ type: 'word', playerId, playerName: player.name, word, at: Date.now() });
   if (game.history.length > 80) game.history.splice(0, game.history.length - 80);
+
+  const exhausted = game.type === 'choseong' && remainingChoseongCount(game) === 0;
   advance(game, playerId);
+  if (game.status === 'playing' && exhausted) startNextChoseongRound(game, 'exhausted');
   return word;
 }
 
@@ -249,11 +292,23 @@ function timeout(game) {
   if (!game || game.status !== 'playing' || !game.currentPlayerId) return null;
   const player = game.players.find(p => p.id === game.currentPlayerId);
   if (!player || player.eliminated) return null;
+
   player.lives = Math.max(0, player.lives - 1);
   if (player.lives === 0) player.eliminated = true;
+
+  if (game.type === 'choseong') {
+    const failed = new Set(game.consecutiveFailedPlayerIds || []);
+    failed.add(player.id);
+    game.consecutiveFailedPlayerIds = [...failed];
+  }
+
   game.history.push({ type: 'timeout', playerId: player.id, playerName: player.name, lives: player.lives, at: Date.now() });
   if (game.history.length > 80) game.history.splice(0, game.history.length - 80);
+
   advance(game, player.id);
+  if (game.status === 'playing' && game.type === 'choseong' && allActivePlayersFailed(game)) {
+    startNextChoseongRound(game, 'all_failed');
+  }
   return player;
 }
 
@@ -265,7 +320,11 @@ function removePlayer(game, playerId) {
   p.lives = 0;
   p.eliminated = true;
   game.history.push({ type: 'leave', playerId: p.id, playerName: p.name, at: Date.now() });
+
   if (!finishIfNeeded(game) && wasCurrent) advance(game, playerId);
+  if (game.status === 'playing' && game.type === 'choseong' && allActivePlayersFailed(game)) {
+    startNextChoseongRound(game, 'all_failed');
+  }
 }
 
 function publicGame(game, roomPlayers) {
@@ -282,6 +341,8 @@ function publicGame(game, roomPlayers) {
     prompt: game.prompt,
     lastWord: game.lastWord,
     usedWordCount: game.usedWords.length,
+    roundNumber: game.roundNumber,
+    roundRemainingWords: game.type === 'choseong' ? remainingChoseongCount(game) : null,
     history: game.history.slice(-40),
     winnerId: game.winnerId,
     turnNumber: game.turnNumber,
