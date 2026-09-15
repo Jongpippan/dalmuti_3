@@ -18,8 +18,10 @@ function bindPicker(root,s,mode='select'){
  root.querySelectorAll('[data-game-type]').forEach(b=>b.onclick=async()=>{
   const type=b.dataset.gameType;
   if(mode==='switch'){
-   if(type===s.room.gameType){closeDialog();return}
-   if(!confirm(`진행 중인 게임을 종료하고 ${META[type].name}(으)로 바로 바꿀까요?`))return;
+   const same=type===s.room.gameType;
+   if(same&&s.wordGame?.status!=='finished'){closeDialog();return}
+   const message=same?`${META[type].name}을(를) 새 게임으로 다시 시작할까요?`:`진행 중인 게임을 종료하고 ${META[type].name}(으)로 바로 바꿀까요?`;
+   if(!confirm(message))return;
    if(await act('switch-game',{gameType:type}))closeDialog();
   }else await act('select-game',{gameType:type});
  });
@@ -56,7 +58,7 @@ function wordGame(s){
  const promptValue=s.room.gameType==='choseong'?g.prompt:(g.lastWord?[...g.lastWord].at(-1):'자유');
  $('#wordPromptLabel').textContent=promptLabel;$('#wordPrompt').textContent=promptValue;
  $('#wordLastWord').textContent=s.room.gameType==='wordchain'?(g.lastWord?`직전 단어: ${g.lastWord}`:'첫 단어는 자유롭게 시작하세요.'):`사용한 단어 ${g.usedWordCount}개 · 사전 ${Number(g.dictionarySize||0).toLocaleString()}개`;
- $('#wordTurnStatus').textContent=g.status==='finished'?`${winner?.name||'플레이어'} 승리!`:myTurn?'내 차례입니다. 단어를 입력하세요.':`${cur?.name||''}님의 차례입니다.`;
+ $('#wordTurnStatus').textContent=g.status==='finished'?`${winner?.name||'플레이어'} 승리!${host?' · 게임 바꾸기에서 같은 게임을 눌러 재시작할 수 있습니다.':''}`:myTurn?'내 차례입니다. 단어를 입력하세요.':`${cur?.name||''}님의 차례입니다.`;
  const inp=$('#wordInput'),submit=$('#wordSubmit');inp.disabled=!myTurn;submit.disabled=!myTurn;
  inp.placeholder=myTurn?(s.room.gameType==='choseong'?`${g.prompt} 단어 입력`:`${promptValue}(으)로 시작하는 단어`):'내 차례를 기다리는 중';
  if(myTurn&&document.activeElement!==inp)setTimeout(()=>inp.focus(),0);
