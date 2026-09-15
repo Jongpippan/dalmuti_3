@@ -1,7 +1,7 @@
 (()=>{
 const META={
  dalmuti:{name:'대 달무티',icon:'♛',desc:'계급이 뒤집히는 4–8인 카드게임',min:4,max:8},
- choseong:{name:'초성게임',icon:'ㄱ',desc:'주어진 초성에 맞는 단어를 제한 시간 안에!',min:2,max:20},
+ choseong:{name:'초성게임',icon:'ㄱ',desc:'한 초성으로 돌아가며 겹치지 않는 단어를 내는 생존전',min:2,max:20},
  wordchain:{name:'끝말잇기',icon:'끝',desc:'앞 단어의 마지막 글자로 이어가는 생존전',min:2,max:20}
 };
 const originalGame=game;
@@ -50,19 +50,31 @@ function multiLobby(s){
 function wordGame(s){
  show('game');setMode(s.room.gameType);
  const g=s.wordGame,host=s.viewerId===s.room.hostId,meta=META[s.room.gameType],cur=g.players.find(p=>p.id===g.currentPlayerId),myTurn=g.status==='playing'&&g.currentPlayerId===s.viewerId;
- $('#handNo').textContent=`${g.turnNumber}턴`;$('#phase').textContent=g.status==='finished'?'게임 종료':meta.name;$('#roomBadge').textContent=s.room.code;
+ $('#handNo').textContent=s.room.gameType==='choseong'?`${g.roundNumber||1}라운드 · ${g.turnNumber}턴`:`${g.turnNumber}턴`;
+ $('#phase').textContent=g.status==='finished'?'게임 종료':meta.name;$('#roomBadge').textContent=s.room.code;
  const winner=g.players.find(p=>p.id===g.winnerId);
  $('#players').innerHTML=g.players.map(p=>`<div class="player wordPlayer ${p.id===g.currentPlayerId?'turn':''} ${p.id===s.viewerId?'me':''} ${p.eliminated?'eliminated':''}" data-player-id="${p.id}"><div class="wordRole">${p.eliminated?'탈락':`점수 ${p.score}`}</div><div class="pname">${esc(p.name)}${p.id===s.viewerId?' (나)':''}${p.bot?' · 봇':''}</div><div class="pmeta"><span class="lives">${'♥'.repeat(p.lives)}${'♡'.repeat(Math.max(0,(p.maxLives||3)-p.lives))}</span>${p.connected?'':' · 연결 끊김'}</div>${host&&!p.bot&&p.id!==s.viewerId&&s.room.players.some(x=>x.id===p.id)?`<button class="tiny" data-kick="${p.id}" data-name="${esc(p.name)}">강퇴</button>`:''}</div>`).join('')+s.room.players.filter(p=>p.waiting).map(p=>`<div class="player waiting"><div class="role">다음 게임 참가</div><div class="pname">${esc(p.name)}${p.bot?' · 봇':''}</div></div>`).join('');
  bindKickButtons();
- const promptLabel=s.room.gameType==='choseong'?'이번 초성':'이어야 할 글자';
- const promptValue=s.room.gameType==='choseong'?g.prompt:(g.lastWord?[...g.lastWord].at(-1):'자유');
+
+ const isChoseong=s.room.gameType==='choseong';
+ const required=g.lastWord?[...g.lastWord].at(-1):null;
+ const promptLabel=isChoseong?`이번 초성 · ${g.roundNumber||1}라운드`:'직전 단어';
+ const promptValue=isChoseong?g.prompt:(g.lastWord||'자유 시작');
  $('#wordPromptLabel').textContent=promptLabel;$('#wordPrompt').textContent=promptValue;
- $('#wordLastWord').textContent=s.room.gameType==='wordchain'?(g.lastWord?`직전 단어: ${g.lastWord}`:'첫 단어는 자유롭게 시작하세요.'):`사용한 단어 ${g.usedWordCount}개 · 사전 ${Number(g.dictionarySize||0).toLocaleString()}개`;
+ $('#wordLastWord').textContent=isChoseong
+  ? `같은 초성으로 겹치지 않게 이어갑니다 · 남은 단어 ${Number(g.roundRemainingWords||0).toLocaleString()}개`
+  : (g.lastWord?`끝 글자 '${required}'(으)로 시작하는 단어를 입력하세요.`:'첫 단어는 자유롭게 시작하세요.');
  $('#wordTurnStatus').textContent=g.status==='finished'?`${winner?.name||'플레이어'} 승리!${host?' · 게임 바꾸기에서 같은 게임을 눌러 재시작할 수 있습니다.':''}`:myTurn?'내 차례입니다. 단어를 입력하세요.':`${cur?.name||''}님의 차례입니다.`;
  const inp=$('#wordInput'),submit=$('#wordSubmit');inp.disabled=!myTurn;submit.disabled=!myTurn;
- inp.placeholder=myTurn?(s.room.gameType==='choseong'?`${g.prompt} 단어 입력`:`${promptValue}(으)로 시작하는 단어`):'내 차례를 기다리는 중';
+ inp.placeholder=myTurn?(isChoseong?`${g.prompt} 단어 입력`:(required?`${required}(으)로 시작하는 단어`:'첫 단어 입력')):'내 차례를 기다리는 중';
  if(myTurn&&document.activeElement!==inp)setTimeout(()=>inp.focus(),0);
- $('#wordHistory').innerHTML=[...g.history].reverse().map(h=>h.type==='word'?`<div class="wordHistoryItem"><strong>${esc(h.playerName)}</strong><span>${esc(h.word)}</span></div>`:h.type==='timeout'?`<div class="wordHistoryItem timeout"><strong>${esc(h.playerName)}</strong><span>시간 초과 · 목숨 ${h.lives}</span></div>`:`<div class="wordHistoryItem timeout"><strong>${esc(h.playerName)}</strong><span>게임에서 나감</span></div>`).join('')||'<div class="wordHistoryEmpty">아직 제출된 단어가 없습니다.</div>';
+
+ $('#wordHistory').innerHTML=[...g.history].reverse().map(h=>{
+  if(h.type==='word')return `<div class="wordHistoryItem"><strong>${esc(h.playerName)}</strong><span>${esc(h.word)}</span></div>`;
+  if(h.type==='timeout')return `<div class="wordHistoryItem timeout"><strong>${esc(h.playerName)}</strong><span>시간 초과 · 목숨 ${h.lives}</span></div>`;
+  if(h.type==='round')return `<div class="wordHistoryItem"><strong>${h.roundNumber}라운드</strong><span>${esc(h.prompt)} · ${h.reason==='exhausted'?'남은 단어 없음':'전원 연속 실패'}</span></div>`;
+  return `<div class="wordHistoryItem timeout"><strong>${esc(h.playerName||'플레이어')}</strong><span>게임에서 나감</span></div>`;
+ }).join('')||'<div class="wordHistoryEmpty">아직 제출된 단어가 없습니다.</div>';
  updateTimer();
 }
 function updateTimer(){
