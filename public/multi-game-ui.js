@@ -84,7 +84,7 @@ function updateTimer(){
  const left=Math.max(0,g.turnDeadline-Date.now()),sec=Math.ceil(left/1000),pct=Math.max(0,Math.min(100,left/g.turnLimitMs*100));
  el.textContent=`${sec}초`;el.classList.toggle('urgent',sec<=5);if(bar)bar.style.width=`${pct}%`;
 }
-async function submitWord(){const inp=$('#wordInput'),word=inp?.value.trim();if(!word)return;if(await act('submit-word',{word}))inp.value=''}
+async function submitWord(){const inp=$('#wordInput'),word=inp?.value.trim();if(!word)return;await act('send-chat',{message:`시도 · ${word}`});if(await act('submit-word',{word}))inp.value=''}
 async function multiLoadRooms(){
  try{
   const r=await fetch('/api/rooms',{cache:'no-store'}),j=await r.json();if(!j.ok)throw Error();const box=$('#roomList');if(!box)return;
