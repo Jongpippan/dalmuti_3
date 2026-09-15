@@ -45,7 +45,7 @@ replaceOnce(
 replaceOnce(
   'schedule restart on emit',
   "function emit(r) {\n",
-  "function emit(r) {\n  scheduleWordRestart(r);\n"
+  "function emit(r) {\n  r.lastHumanActivityAt = Date.now();\n  scheduleWordRestart(r);\n"
 );
 
 replaceOnce(
