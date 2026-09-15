@@ -10,7 +10,17 @@ const CHAT_COLORS=[
  {accent:'#687151',bg:'rgba(104,113,81,.065)'},
  {accent:'#805f5a',bg:'rgba(128,95,90,.065)'},
  {accent:'#5f6f7a',bg:'rgba(95,111,122,.065)'},
- {accent:'#75616e',bg:'rgba(117,97,110,.065)'}
+ {accent:'#75616e',bg:'rgba(117,97,110,.065)'},
+ {accent:'#8a5a78',bg:'rgba(138,90,120,.065)'},
+ {accent:'#4f748c',bg:'rgba(79,116,140,.065)'},
+ {accent:'#6f783f',bg:'rgba(111,120,63,.065)'},
+ {accent:'#8a6842',bg:'rgba(138,104,66,.065)'},
+ {accent:'#62558a',bg:'rgba(98,85,138,.065)'},
+ {accent:'#3f766e',bg:'rgba(63,118,110,.065)'},
+ {accent:'#925b49',bg:'rgba(146,91,73,.065)'},
+ {accent:'#566b94',bg:'rgba(86,107,148,.065)'},
+ {accent:'#755987',bg:'rgba(117,89,135,.065)'},
+ {accent:'#58705c',bg:'rgba(88,112,92,.065)'}
 ];
 const $all=s=>[...document.querySelectorAll(s)];
 const colorSlotsByRoom=new Map();
