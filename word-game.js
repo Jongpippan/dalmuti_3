@@ -51,6 +51,7 @@ function loadDictionary() {
 
   const raw = fs.readFileSync(DB_PATH, 'utf8').replace(/^\uFEFF/, '');
   const set = new Set();
+  const words = [];
   let rows = 0;
 
   for (const line of raw.split(/\r?\n/)) {
@@ -62,35 +63,47 @@ function loadDictionary() {
     if (!word || (word === '낱말' && part === '품사')) continue;
     if (word.length < 2 || !HANGUL_WORD.test(word)) continue;
     if (part.includes('동사') || part.includes('형용사')) continue;
+    if (set.has(word)) continue;
 
     set.add(word);
+    words.push(word);
     rows += 1;
   }
 
   if (!set.size) throw Error('한국어 단어 DB에서 사용할 수 있는 단어를 읽지 못했습니다.');
 
-  const promptCounts = new Map();
-  for (const word of set) {
-    if ([...word].length !== 2) continue;
-    const prompt = getChoseong(word);
-    promptCounts.set(prompt, (promptCounts.get(prompt) || 0) + 1);
+  const choseongWords = new Map();
+  const startWords = new Map();
+  for (const word of words) {
+    const first = [...word][0];
+    if (!startWords.has(first)) startWords.set(first, []);
+    startWords.get(first).push(word);
+
+    if ([...word].length === 2) {
+      const prompt = getChoseong(word);
+      if (!choseongWords.has(prompt)) choseongWords.set(prompt, []);
+      choseongWords.get(prompt).push(word);
+    }
   }
 
-  let prompts = [...promptCounts.entries()]
-    .filter(([, count]) => count >= MIN_PROMPT_ANSWERS)
+  let prompts = [...choseongWords.entries()]
+    .filter(([, candidates]) => candidates.length >= MIN_PROMPT_ANSWERS)
     .map(([prompt]) => prompt);
 
-  if (!prompts.length) prompts = [...promptCounts.keys()];
+  if (!prompts.length) prompts = [...choseongWords.keys()];
 
   console.log(`[word-db] Loaded ${set.size.toLocaleString()} unique words from korean-word-game/db (${rows.toLocaleString()} accepted rows).`);
   console.log(`[word-db] Choseong prompt pool: ${prompts.length.toLocaleString()} combinations.`);
 
-  return { set, prompts };
+  return { set, words, prompts, choseongWords, startWords };
 }
 
 const dictionary = loadDictionary();
 const wordSet = dictionary.set;
+const wordList = dictionary.words;
 const promptPool = dictionary.prompts;
+const choseongWords = dictionary.choseongWords;
+const startWords = dictionary.startWords;
 
 function randomPrompt(previous = '') {
   if (!promptPool.length) return 'ㅅㄱ';
@@ -103,11 +116,10 @@ function randomPrompt(previous = '') {
 
 function createGame(type, roomPlayers, options = {}) {
   if (!['choseong', 'wordchain'].includes(type)) throw Error('지원하지 않는 단어 게임입니다.');
-  const humans = roomPlayers.filter(p => !p.bot);
-  if (humans.length < 2) throw Error('단어 게임은 사람 플레이어 2명 이상이 필요합니다.');
+  if (roomPlayers.length < 2) throw Error('단어 게임은 플레이어 2명 이상이 필요합니다.');
   const turnLimitMs = Math.max(5000, Math.min(60000, Number(options.turnLimitMs) || 15000));
   const lives = Math.max(1, Math.min(5, Number(options.lives) || 3));
-  const players = humans.map((p, i) => ({
+  const players = roomPlayers.map((p, i) => ({
     id: p.id,
     name: p.name,
     portrait: p.portrait || 'royal',
@@ -116,7 +128,8 @@ function createGame(type, roomPlayers, options = {}) {
     maxLives: lives,
     score: 0,
     eliminated: false,
-    connected: p.connected !== false
+    connected: p.bot ? true : p.connected !== false,
+    bot: !!p.bot
   }));
   return {
     kind: 'word',
@@ -204,6 +217,34 @@ function submit(game, playerId, rawWord) {
   return word;
 }
 
+function randomUnused(candidates, used) {
+  if (!candidates?.length) return null;
+  for (let i = 0; i < Math.min(24, candidates.length); i++) {
+    const word = candidates[Math.floor(Math.random() * candidates.length)];
+    if (!used.has(word)) return word;
+  }
+  for (const word of candidates) if (!used.has(word)) return word;
+  return null;
+}
+
+function pickBotWord(game) {
+  if (!game || game.status !== 'playing' || !game.currentPlayerId) return null;
+  const player = game.players.find(p => p.id === game.currentPlayerId);
+  if (!player?.bot || player.eliminated) return null;
+  const used = new Set(game.usedWords);
+
+  if (game.type === 'choseong') {
+    return randomUnused(choseongWords.get(game.prompt), used);
+  }
+
+  if (game.lastWord) {
+    const required = [...game.lastWord].at(-1);
+    return randomUnused(startWords.get(required), used);
+  }
+
+  return randomUnused(wordList, used);
+}
+
 function timeout(game) {
   if (!game || game.status !== 'playing' || !game.currentPlayerId) return null;
   const player = game.players.find(p => p.id === game.currentPlayerId);
@@ -250,7 +291,8 @@ function publicGame(game, roomPlayers) {
       id: p.id,
       name: p.name,
       portrait: present.get(p.id)?.portrait || p.portrait || 'royal',
-      connected: !!present.get(p.id)?.connected,
+      connected: p.bot ? true : !!present.get(p.id)?.connected,
+      bot: !!p.bot,
       lives: p.lives,
       maxLives: p.maxLives,
       score: p.score,
@@ -262,6 +304,7 @@ function publicGame(game, roomPlayers) {
 module.exports = {
   createGame,
   submit,
+  pickBotWord,
   timeout,
   removePlayer,
   publicGame,
