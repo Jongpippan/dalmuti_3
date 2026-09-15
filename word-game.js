@@ -121,10 +121,10 @@ function randomPrompt(previous = '', usedWords = []) {
   const used = usedWords instanceof Set ? usedWords : new Set(usedWords || []);
   const candidates = promptPool.filter(prompt =>
     prompt !== previous && (choseongWords.get(prompt) || []).some(word => !used.has(word))
-  );
+  ));
   const fallback = promptPool.filter(prompt =>
-    (choseongWords.get(prompt) || []).some(word => !used.has(word)
-  );
+    (choseongWords.get(prompt) || []).some(word => !used.has(word))
+  ));
   const pool = candidates.length ? candidates : fallback.length ? fallback : promptPool;
   return pool[Math.floor(Math.random() * pool.length)];
 }
