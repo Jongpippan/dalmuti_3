@@ -11,7 +11,8 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = '0.0.0.0';
 const PUBLIC = path.join(__dirname, 'public');
 const rooms = new Map();
-const MAX_PLAYERS = 8;
+const DALMUTI_MAX_PLAYERS = 8;
+const WORD_MAX_PLAYERS = 20;
 const MIN_PLAYERS = 4;
 const TURN_LIMIT_MS = 30000;
 const WORD_TURN_LIMIT_MS = 15000;
@@ -90,7 +91,10 @@ function normalizeGameRoles(g) {
   g.players.forEach((p, i) => { p.roleIndex = i; p.seat = i; p.role = roleName(i); });
 }
 function normalizedRoomRules(r) { r.rules = E.normalizeRules(r.rules); return r.rules; }
+function maxPlayersForType(type) { return type === 'dalmuti' ? DALMUTI_MAX_PLAYERS : WORD_MAX_PLAYERS; }
 function roomStarted(r) { return r.gameType === 'dalmuti' ? !!r.game : !!r.wordGame; }
+function roomGameType(r) { return roomStarted(r) ? r.gameType : (r.selectedGame || 'dalmuti'); }
+function roomMaxPlayers(r) { return maxPlayersForType(roomGameType(r)); }
 function isActivePlayer(r, id) {
   if (r.gameType === 'dalmuti') return !!r.game?.players.some(p => p.id === id);
   if (r.gameType === 'choseong' || r.gameType === 'wordchain') return !!r.wordGame?.players.some(p => p.id === id);
@@ -152,7 +156,7 @@ function state(r, v) {
   return {
     room: {
       code: r.code,
-      maxPlayers: MAX_PLAYERS,
+      maxPlayers: roomMaxPlayers(r),
       hostId: r.hostId,
       dalmutiId: currentDalmutiId(r),
       rules: r.rules,
@@ -177,11 +181,11 @@ function publicRooms() {
   return [...rooms.values()].filter(r => r.players.length && !r.testRoom).map(r => ({
     code: r.code,
     count: r.players.length,
-    maxPlayers: MAX_PLAYERS,
+    maxPlayers: roomMaxPlayers(r),
     started: roomStarted(r),
     gameType: roomStarted(r) ? r.gameType : r.selectedGame,
     gameName: GAME_NAMES[roomStarted(r) ? r.gameType : r.selectedGame] || '게임',
-    joinable: r.players.length < MAX_PLAYERS
+    joinable: r.players.length < roomMaxPlayers(r)
   })).sort((a, b) => Number(a.started) - Number(b.started) || b.count - a.count || a.code.localeCompare(b.code));
 }
 function sse(res, event, data) {
@@ -416,9 +420,43 @@ function clearWordTimer(r) {
   r.wordTurnKey = null;
   if (r.wordGame) r.wordGame.turnDeadline = null;
 }
+function clearWordBotTimer(r) {
+  if (r.wordBotTimer) { clearTimeout(r.wordBotTimer); r.wordBotTimer = null; }
+  r.wordBotKey = null;
+}
+function scheduleWordBot(r) {
+  const g = r.wordGame;
+  if (!g || !['choseong', 'wordchain'].includes(r.gameType) || g.status !== 'playing' || !g.currentPlayerId || !isBot(r, g.currentPlayerId)) { clearWordBotTimer(r); return; }
+  const key = `${g.turnNumber}:${g.currentPlayerId}`;
+  if (r.wordBotKey === key && r.wordBotTimer) return;
+  clearWordBotTimer(r);
+  r.wordBotKey = key;
+  const delay = 1000 + Math.floor(Math.random() * 3001);
+  r.wordBotTimer = setTimeout(() => {
+    r.wordBotTimer = null;
+    r.wordBotKey = null;
+    const gg = r.wordGame;
+    if (!gg || !['choseong', 'wordchain'].includes(r.gameType) || gg.status !== 'playing' || `${gg.turnNumber}:${gg.currentPlayerId}` !== key || !isBot(r, gg.currentPlayerId)) return;
+    const bot = r.players.find(x => x.id === gg.currentPlayerId);
+    const word = W.pickBotWord(gg);
+    if (!word) return;
+    try {
+      W.submit(gg, bot.id, word);
+      r.chat.push({ id: crypto.randomUUID(), playerId: 'system', name: '시스템', text: `${bot.name}: ${word} ✓`, at: Date.now() });
+    } catch { return; }
+    if (gg.status === 'playing') {
+      scheduleWordTimer(r, true);
+      scheduleWordBot(r);
+    } else {
+      clearWordTimer(r);
+      clearWordBotTimer(r);
+    }
+    emit(r);
+  }, delay);
+}
 function scheduleWordTimer(r, force = false) {
   const g = r.wordGame;
-  if (!g || !['choseong', 'wordchain'].includes(r.gameType) || g.status !== 'playing' || !g.currentPlayerId) { clearWordTimer(r); return; }
+  if (!g || !['choseong', 'wordchain'].includes(r.gameType) || g.status !== 'playing' || !g.currentPlayerId) { clearWordTimer(r); clearWordBotTimer(r); return; }
   const key = `${g.turnNumber}:${g.currentPlayerId}`;
   if (!force && r.wordTurnKey === key && r.wordTimer) return;
   if (r.wordTimer) clearTimeout(r.wordTimer);
@@ -432,7 +470,13 @@ function scheduleWordTimer(r, force = false) {
       const text = timedOut.lives > 0 ? `${timedOut.name}님이 시간 초과! 목숨이 ${timedOut.lives}개 남았습니다.` : `${timedOut.name}님이 시간 초과로 탈락했습니다.`;
       r.chat.push({ id: crypto.randomUUID(), playerId: 'system', name: '시스템', text, at: Date.now() });
     }
-    if (r.wordGame.status === 'playing') scheduleWordTimer(r, true); else clearWordTimer(r);
+    if (r.wordGame.status === 'playing') {
+      scheduleWordTimer(r, true);
+      scheduleWordBot(r);
+    } else {
+      clearWordTimer(r);
+      clearWordBotTimer(r);
+    }
     emit(r);
   }, g.turnLimitMs);
 }
@@ -442,14 +486,17 @@ function clearGameTimers(r) {
   if (r.nextHandTimer) { clearTimeout(r.nextHandTimer); r.nextHandTimer = null; }
   clearTurnTimer(r);
   clearWordTimer(r);
+  clearWordBotTimer(r);
 }
 function resetPlayerModes(r) {
   for (const p of r.players) { p.resting = false; p.roundRestHand = null; p.roundRestNumber = null; p.aiPlaying = false; }
 }
 function startGameType(r, type) {
   type = cleanGameType(type);
+  const maxPlayers = maxPlayersForType(type);
+  if (r.players.length > maxPlayers) throw Error(`${GAME_NAMES[type]}은(는) 최대 ${maxPlayers}명까지 가능합니다.`);
   if (type === 'dalmuti' && r.players.length < MIN_PLAYERS) throw Error('달무티는 최소 4명이 필요합니다.');
-  if ((type === 'choseong' || type === 'wordchain') && r.players.filter(p => !p.bot).length < 2) throw Error('단어 게임은 사람 플레이어 2명 이상이 필요합니다.');
+  if ((type === 'choseong' || type === 'wordchain') && r.players.length < 2) throw Error('단어 게임은 사람/봇 합계 2명 이상이 필요합니다.');
   clearGameTimers(r);
   resetPlayerModes(r);
   r.game = null;
@@ -457,12 +504,12 @@ function startGameType(r, type) {
   r.gameType = type;
   r.selectedGame = type;
   if (type === 'dalmuti') {
-    if (r.players.length > MAX_PLAYERS) { r.gameType = null; throw Error('최대 8명까지 가능합니다.'); }
     r.game = E.createGame(r.players.map(x => ({ id: x.id, name: x.name, portrait: x.portrait, connected: true })), r.rules);
     afterAction(r);
   } else {
     r.wordGame = W.createGame(type, r.players, { turnLimitMs: WORD_TURN_LIMIT_MS, lives: 3 });
     scheduleWordTimer(r, true);
+    scheduleWordBot(r);
     emit(r);
   }
 }
@@ -470,8 +517,8 @@ function wordPlayerLeft(r, playerId) {
   if (!r.wordGame || !['choseong', 'wordchain'].includes(r.gameType)) return;
   const before = r.wordGame.currentPlayerId;
   W.removePlayer(r.wordGame, playerId);
-  if (r.wordGame.status === 'playing' && r.wordGame.currentPlayerId !== before) scheduleWordTimer(r, true);
-  else if (r.wordGame.status !== 'playing') clearWordTimer(r);
+  if (r.wordGame.status === 'playing' && r.wordGame.currentPlayerId !== before) { scheduleWordTimer(r, true); scheduleWordBot(r); }
+  else if (r.wordGame.status !== 'playing') { clearWordTimer(r); clearWordBotTimer(r); }
 }
 function requireDalmuti(r) {
   if (r.gameType !== 'dalmuti' || !r.game) throw Error('현재 게임은 달무티가 아닙니다.');
@@ -481,7 +528,7 @@ function roomBase(code, u) {
   return {
     code, hostId: u.id, players: [u], game: null, wordGame: null, gameType: null, selectedGame: 'dalmuti',
     chat: [], rules: { remainderMode: 'low' }, lowestChatMode: 'pika', botTimer: null, autoTimer: null,
-    nextHandTimer: null, turnTimer: null, turnKey: null, turnDeadline: null, wordTimer: null, wordTurnKey: null
+    nextHandTimer: null, turnTimer: null, turnKey: null, turnDeadline: null, wordTimer: null, wordTurnKey: null, wordBotTimer: null, wordBotKey: null
   };
 }
 
@@ -507,7 +554,8 @@ const A = {
       existing.token = crypto.randomUUID(); existing.portrait = cleanPortrait(p.portrait || existing.portrait); existing.connected = true;
       afterAction(r); return { session: session(r, existing), state: state(r, existing.id) };
     }
-    if (r.players.length >= MAX_PLAYERS) throw Error('방이 가득 찼습니다. 최대 8명입니다.');
+    const maxPlayers = roomMaxPlayers(r);
+    if (r.players.length >= maxPlayers) throw Error(`방이 가득 찼습니다. 현재 게임은 최대 ${maxPlayers}명입니다.`);
     const u = { id: crypto.randomUUID(), token: crypto.randomUUID(), name, portrait: cleanPortrait(p.portrait), connected: true, stream: null, resting: false, aiPlaying: false };
     r.players.push(u);
     if (roomStarted(r)) {
@@ -537,7 +585,10 @@ const A = {
     const { r, u } = auth(p);
     if (u.id !== r.hostId) throw Error('방장만 게임을 선택할 수 있습니다.');
     if (roomStarted(r)) throw Error('게임 중에는 게임 바꾸기를 사용해 주세요.');
-    r.selectedGame = cleanGameType(p.gameType);
+    const type = cleanGameType(p.gameType);
+    const maxPlayers = maxPlayersForType(type);
+    if (r.players.length > maxPlayers) throw Error(`${GAME_NAMES[type]}은(는) 최대 ${maxPlayers}명까지 가능합니다.`);
+    r.selectedGame = type;
     r.chat.push({ id: crypto.randomUUID(), playerId: 'system', name: '시스템', text: `다음 게임이 ${GAME_NAMES[r.selectedGame]}(으)로 선택되었습니다.`, at: Date.now() });
     emit(r); return {};
   },
@@ -560,9 +611,9 @@ const A = {
     afterAction(r); return {};
   },
   'add-bot': p => {
-    const { r, u } = auth(p); if (u.id !== r.hostId) throw Error('방장만 봇을 추가할 수 있습니다.'); if (r.players.length >= MAX_PLAYERS) throw Error('방이 가득 찼습니다. 최대 8명입니다.');
+    const { r, u } = auth(p); if (u.id !== r.hostId) throw Error('방장만 봇을 추가할 수 있습니다.'); const maxPlayers = roomMaxPlayers(r); if (r.players.length >= maxPlayers) throw Error(`방이 가득 찼습니다. 현재 게임은 최대 ${maxPlayers}명입니다.`);
     const bot = makeBot(r); r.players.push(bot);
-    r.chat.push({ id: crypto.randomUUID(), playerId: 'system', name: '시스템', text: roomStarted(r) ? `${bot.name}이 추가되었습니다. 다음 달무티 판 또는 다음 게임부터 합류합니다.` : `${bot.name}이 방에 추가되었습니다.`, at: Date.now() });
+    r.chat.push({ id: crypto.randomUUID(), playerId: 'system', name: '시스템', text: roomStarted(r) ? `${bot.name}이 추가되었습니다. 다음 판 또는 다음 게임부터 합류합니다.` : `${bot.name}이 방에 추가되었습니다.`, at: Date.now() });
     afterAction(r); return {};
   },
   'remove-bot': p => {
@@ -594,7 +645,7 @@ const A = {
     if (!r.wordGame || !['choseong', 'wordchain'].includes(r.gameType)) throw Error('현재 게임은 단어 게임이 아닙니다.');
     const word = W.submit(r.wordGame, u.id, p.word);
     r.chat.push({ id: crypto.randomUUID(), playerId: 'system', name: '시스템', text: `${u.name}: ${word} ✓`, at: Date.now() });
-    if (r.wordGame.status === 'playing') scheduleWordTimer(r, true); else clearWordTimer(r);
+    if (r.wordGame.status === 'playing') { scheduleWordTimer(r, true); scheduleWordBot(r); } else { clearWordTimer(r); clearWordBotTimer(r); }
     emit(r); return {};
   },
   'declare-revolution': p => { const { r, u } = auth(p); E.declareRevolution(requireDalmuti(r), u.id, !!p.greater); afterAction(r); return {}; },
