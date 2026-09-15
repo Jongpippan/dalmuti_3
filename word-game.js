@@ -7,6 +7,7 @@ const DB_PATH = process.env.WORD_DB_PATH
   ? path.resolve(process.env.WORD_DB_PATH)
   : path.join(__dirname, 'data', 'kr_korean.csv');
 const MIN_PROMPT_ANSWERS = 8;
+const REVEAL_MS = 900;
 
 function normalizeWord(value) {
   return String(value || '').normalize('NFC').trim().replace(/\s+/g, '');
@@ -152,6 +153,7 @@ function createGame(type, roomPlayers, options = {}) {
     phase: 'play',
     players,
     currentPlayerId: players[0].id,
+    baseTurnLimitMs: turnLimitMs,
     turnLimitMs,
     turnDeadline: null,
     prompt: type === 'choseong' ? randomPrompt() : null,
@@ -161,7 +163,8 @@ function createGame(type, roomPlayers, options = {}) {
     winnerId: null,
     turnNumber: 1,
     roundNumber: type === 'choseong' ? 1 : null,
-    consecutiveFailedPlayerIds: []
+    consecutiveFailedPlayerIds: [],
+    reveal: null
   };
 }
 
@@ -188,6 +191,7 @@ function finishIfNeeded(game) {
     game.winnerId = active[0]?.id || null;
     game.currentPlayerId = null;
     game.turnDeadline = null;
+    game.reveal = null;
     return true;
   }
   return false;
@@ -232,11 +236,24 @@ function validateCommon(game, word) {
   if (game.usedWords.includes(word)) throw Error('이미 나온 단어입니다.');
 }
 
+function resetReveal(game) {
+  if (!game) return;
+  game.reveal = null;
+  game.turnLimitMs = game.baseTurnLimitMs || game.turnLimitMs;
+}
+
+function setReveal(game, reveal) {
+  const base = game.baseTurnLimitMs || game.turnLimitMs;
+  game.reveal = { ...reveal, until: Date.now() + REVEAL_MS };
+  game.turnLimitMs = base + REVEAL_MS;
+}
+
 function submit(game, playerId, rawWord) {
   if (!game || game.status !== 'playing' || game.phase !== 'play') throw Error('지금은 단어를 제출할 수 없습니다.');
   if (game.currentPlayerId !== playerId) throw Error('내 차례가 아닙니다.');
   const player = game.players.find(p => p.id === playerId);
   if (!player || player.eliminated) throw Error('현재 게임에 참가 중이 아닙니다.');
+  resetReveal(game);
   const word = normalizeWord(rawWord);
   validateCommon(game, word);
 
@@ -270,6 +287,16 @@ function randomUnused(candidates, used) {
   return null;
 }
 
+function randomUnusedMany(candidates, used, limit = 3) {
+  const available = (candidates || []).filter(word => !used.has(word));
+  const picked = [];
+  while (available.length && picked.length < limit) {
+    const i = Math.floor(Math.random() * available.length);
+    picked.push(available.splice(i, 1)[0]);
+  }
+  return picked;
+}
+
 function pickBotWord(game) {
   if (!game || game.status !== 'playing' || !game.currentPlayerId) return null;
   const player = game.players.find(p => p.id === game.currentPlayerId);
@@ -293,6 +320,10 @@ function timeout(game) {
   const player = game.players.find(p => p.id === game.currentPlayerId);
   if (!player || player.eliminated) return null;
 
+  resetReveal(game);
+  const failedPrompt = game.type === 'choseong' ? game.prompt : null;
+  const failedLastWord = game.type === 'wordchain' ? game.lastWord : null;
+
   player.lives = Math.max(0, player.lives - 1);
   if (player.lives === 0) player.eliminated = true;
 
@@ -306,8 +337,40 @@ function timeout(game) {
   if (game.history.length > 80) game.history.splice(0, game.history.length - 80);
 
   advance(game, player.id);
-  if (game.status === 'playing' && game.type === 'choseong' && allActivePlayersFailed(game)) {
+  if (game.status !== 'playing') return player;
+
+  if (game.type === 'choseong' && allActivePlayersFailed(game)) {
+    const answers = randomUnusedMany(choseongWords.get(failedPrompt), new Set(game.usedWords), 3);
     startNextChoseongRound(game, 'all_failed');
+    if (answers.length) {
+      setReveal(game, {
+        type: 'choseong',
+        prompt: failedPrompt,
+        words: answers,
+        playerName: player.name
+      });
+    }
+  } else if (game.type === 'wordchain' && failedLastWord) {
+    const required = [...failedLastWord].at(-1);
+    const answer = randomUnused(startWords.get(required), new Set(game.usedWords));
+    if (answer) {
+      game.usedWords.push(answer);
+      game.lastWord = answer;
+      game.history.push({
+        type: 'reveal',
+        word: answer,
+        fromWord: failedLastWord,
+        playerName: player.name,
+        at: Date.now()
+      });
+      if (game.history.length > 80) game.history.splice(0, game.history.length - 80);
+      setReveal(game, {
+        type: 'wordchain',
+        fromWord: failedLastWord,
+        words: [answer],
+        playerName: player.name
+      });
+    }
   }
   return player;
 }
@@ -336,6 +399,7 @@ function publicGame(game, roomPlayers) {
     status: game.status,
     phase: game.phase,
     currentPlayerId: game.currentPlayerId,
+    baseTurnLimitMs: game.baseTurnLimitMs || game.turnLimitMs,
     turnLimitMs: game.turnLimitMs,
     turnDeadline: game.turnDeadline,
     prompt: game.prompt,
@@ -343,6 +407,7 @@ function publicGame(game, roomPlayers) {
     usedWordCount: game.usedWords.length,
     roundNumber: game.roundNumber,
     roundRemainingWords: game.type === 'choseong' ? remainingChoseongCount(game) : null,
+    reveal: game.reveal,
     history: game.history.slice(-40),
     winnerId: game.winnerId,
     turnNumber: game.turnNumber,
