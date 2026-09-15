@@ -2,12 +2,13 @@
 const META={
  dalmuti:{name:'대 달무티',icon:'♛',desc:'계급이 뒤집히는 4–8인 카드게임',min:4,max:8},
  choseong:{name:'초성게임',icon:'ㄱ',desc:'한 초성으로 돌아가며 겹치지 않는 단어를 내는 생존전',min:2,max:20},
- wordchain:{name:'끝말잇기',icon:'끝',desc:'앞 단어의 마지막 글자로 이어가는 생존전',min:2,max:20}
+ wordchain:{name:'끝',desc:'앞 단어의 마지막 글자로 이어가는 생존전',min:2,max:20}
 };
 const originalGame=game;
 const originalLoadRooms=loadRooms;
 const originalLeaveConfirmMessage=leaveConfirmMessage;
 const originalKickPlayer=kickPlayer;
+let revealWasActive=false;
 
 function gameCard(type,selectedType,disabled=false){const m=META[type];return `<button type="button" class="gameChoice ${selectedType===type?'selected':''}" data-game-type="${type}" ${disabled?'disabled':''}><span class="gameChoiceIcon">${m.icon}</span><span><strong>${m.name}</strong><small>${m.desc}</small><em>${m.min}–${m.max}명 · 봇 포함</em></span></button>`}
 function closeDialog(){const d=$('#gameSwitchDialog');if(!d)return;if(d.open)d.close();else d.classList.add('hidden')}
@@ -47,9 +48,10 @@ function multiLobby(s){
  $('#lobbyRules').innerHTML=rulePanel(s,'lobby');$('#lobbyRules').classList.toggle('gameTypeHidden',type!=='dalmuti');bindRulePanel($('#lobbyRules'));
  $('#start').classList.toggle('hidden',!host);$('#start').disabled=!eligible;$('#start').textContent=`${meta.name} 시작`;bindKickButtons();
 }
+function revealActive(g){return !!g?.reveal&&Date.now()<Number(g.reveal.until||0)}
 function wordGame(s){
  show('game');setMode(s.room.gameType);
- const g=s.wordGame,host=s.viewerId===s.room.hostId,meta=META[s.room.gameType],cur=g.players.find(p=>p.id===g.currentPlayerId),myTurn=g.status==='playing'&&g.currentPlayerId===s.viewerId;
+ const g=s.wordGame,host=s.viewerId===s.room.hostId,meta=META[s.room.gameType],cur=g.players.find(p=>p.id===g.currentPlayerId),revealing=revealActive(g),myTurn=g.status==='playing'&&g.currentPlayerId===s.viewerId&&!revealing;
  $('#handNo').textContent=s.room.gameType==='choseong'?`${g.roundNumber||1}라운드 · ${g.turnNumber}턴`:`${g.turnNumber}턴`;
  $('#phase').textContent=g.status==='finished'?'게임 종료':meta.name;$('#roomBadge').textContent=s.room.code;
  const winner=g.players.find(p=>p.id===g.winnerId);
@@ -58,21 +60,35 @@ function wordGame(s){
 
  const isChoseong=s.room.gameType==='choseong';
  const required=g.lastWord?[...g.lastWord].at(-1):null;
- const promptLabel=isChoseong?`이번 초성 · ${g.roundNumber||1}라운드`:'직전 단어';
- const promptValue=isChoseong?g.prompt:(g.lastWord||'자유 시작');
- $('#wordPromptLabel').textContent=promptLabel;$('#wordPrompt').textContent=promptValue;
- $('#wordLastWord').textContent=isChoseong
-  ? `같은 초성으로 겹치지 않게 이어갑니다 · 남은 단어 ${Number(g.roundRemainingWords||0).toLocaleString()}개`
-  : (g.lastWord?`끝 글자 '${required}'(으)로 시작하는 단어를 입력하세요.`:'첫 단어는 자유롭게 시작하세요.');
- $('#wordTurnStatus').textContent=g.status==='finished'?`${winner?.name||'플레이어'} 승리!${host?' · 게임 바꾸기에서 같은 게임을 눌러 재시작할 수 있습니다.':''}`:myTurn?'내 차례입니다. 단어를 입력하세요.':`${cur?.name||''}님의 차례입니다.`;
+ if(revealing){
+  const words=(g.reveal.words||[]).join(' · ');
+  if(g.reveal.type==='choseong'){
+   $('#wordPromptLabel').textContent=`초성 ${g.reveal.prompt} · 가능했던 단어`;
+   $('#wordPrompt').textContent=words||'정답 공개';
+   $('#wordLastWord').textContent='아무도 맞히지 못했습니다. 잠시 후 다음 초성으로 넘어갑니다.';
+  }else{
+   $('#wordPromptLabel').textContent='가능했던 단어';
+   $('#wordPrompt').textContent=words||'정답 공개';
+   $('#wordLastWord').textContent=`'${g.reveal.fromWord||''}' 다음에는 이 단어를 낼 수 있었습니다. 잠시 후 계속합니다.`;
+  }
+ }else{
+  const promptLabel=isChoseong?`이번 초성 · ${g.roundNumber||1}라운드`:'직전 단어';
+  const promptValue=isChoseong?g.prompt:(g.lastWord||'자유 시작');
+  $('#wordPromptLabel').textContent=promptLabel;$('#wordPrompt').textContent=promptValue;
+  $('#wordLastWord').textContent=isChoseong
+   ? `같은 초성으로 겹치지 않게 이어갑니다 · 남은 단어 ${Number(g.roundRemainingWords||0).toLocaleString()}개`
+   : (g.lastWord?`끝 글자 '${required}'(으)로 시작하는 단어를 입력하세요.`:'첫 단어는 자유롭게 시작하세요.');
+ }
+ $('#wordTurnStatus').textContent=g.status==='finished'?`${winner?.name||'플레이어'} 승리!${host?' · 게임 바꾸기에서 같은 게임을 눌러 재시작할 수 있습니다.':''}`:revealing?'정답을 공개하는 중입니다.':myTurn?'내 차례입니다. 단어를 입력하세요.':`${cur?.name||''}님의 차례입니다.`;
  const inp=$('#wordInput'),submit=$('#wordSubmit');inp.disabled=!myTurn;submit.disabled=!myTurn;
- inp.placeholder=myTurn?(isChoseong?`${g.prompt} 단어 입력`:(required?`${required}(으)로 시작하는 단어`:'첫 단어 입력')):'내 차례를 기다리는 중';
+ inp.placeholder=revealing?'정답 공개 중':myTurn?(isChoseong?`${g.prompt} 단어 입력`:(required?`${required}(으)로 시작하는 단어`:'첫 단어 입력')):'내 차례를 기다리는 중';
  if(myTurn&&document.activeElement!==inp)setTimeout(()=>inp.focus(),0);
 
  $('#wordHistory').innerHTML=[...g.history].reverse().map(h=>{
   if(h.type==='word')return `<div class="wordHistoryItem"><strong>${esc(h.playerName)}</strong><span>${esc(h.word)}</span></div>`;
   if(h.type==='timeout')return `<div class="wordHistoryItem timeout"><strong>${esc(h.playerName)}</strong><span>시간 초과 · 목숨 ${h.lives}</span></div>`;
   if(h.type==='round')return `<div class="wordHistoryItem"><strong>${h.roundNumber}라운드</strong><span>${esc(h.prompt)} · ${h.reason==='exhausted'?'남은 단어 없음':'전원 연속 실패'}</span></div>`;
+  if(h.type==='reveal')return `<div class="wordHistoryItem"><strong>정답 공개</strong><span>${esc(h.word)}</span></div>`;
   return `<div class="wordHistoryItem timeout"><strong>${esc(h.playerName||'플레이어')}</strong><span>게임에서 나감</span></div>`;
  }).join('')||'<div class="wordHistoryEmpty">아직 제출된 단어가 없습니다.</div>';
  updateTimer();
@@ -80,8 +96,11 @@ function wordGame(s){
 function updateTimer(){
  const el=$('#wordTimer'),bar=$('#wordTimerBar');if(!el)return;
  if(!state?.wordGame||state.room.gameType==='dalmuti'){el.textContent='';return}
- const g=state.wordGame;if(g.status!=='playing'||!g.turnDeadline){el.textContent='종료';if(bar)bar.style.width='0%';return}
- const left=Math.max(0,g.turnDeadline-Date.now()),sec=Math.ceil(left/1000),pct=Math.max(0,Math.min(100,left/g.turnLimitMs*100));
+ const g=state.wordGame,showReveal=revealActive(g);
+ if(showReveal){revealWasActive=true;el.textContent='정답 공개';el.classList.remove('urgent');if(bar)bar.style.width='100%';return}
+ if(revealWasActive){revealWasActive=false;wordGame(state);return}
+ if(g.status!=='playing'||!g.turnDeadline){el.textContent='종료';if(bar)bar.style.width='0%';return}
+ const left=Math.max(0,g.turnDeadline-Date.now()),sec=Math.ceil(left/1000),base=Math.max(1,Number(g.baseTurnLimitMs||g.turnLimitMs||15000)),pct=Math.max(0,Math.min(100,left/base*100));
  el.textContent=`${sec}초`;el.classList.toggle('urgent',sec<=5);if(bar)bar.style.width=`${pct}%`;
 }
 async function submitWord(){const inp=$('#wordInput'),word=inp?.value.trim();if(!word)return;await act('send-chat',{message:`시도 · ${word}`});if(await act('submit-word',{word}))inp.value=''}
