@@ -1,19 +1,19 @@
 (()=>{
 const META={
- dalmuti:{name:'대 달무티',icon:'♛',desc:'계급이 뒤집히는 4–8인 카드게임',min:4},
- choseong:{name:'초성게임',icon:'ㄱ',desc:'주어진 초성에 맞는 단어를 제한 시간 안에!',min:2},
- wordchain:{name:'끝말잇기',icon:'끝',desc:'앞 단어의 마지막 글자로 이어가는 생존전',min:2}
+ dalmuti:{name:'대 달무티',icon:'♛',desc:'계급이 뒤집히는 4–8인 카드게임',min:4,max:8},
+ choseong:{name:'초성게임',icon:'ㄱ',desc:'주어진 초성에 맞는 단어를 제한 시간 안에!',min:2,max:20},
+ wordchain:{name:'끝말잇기',icon:'끝',desc:'앞 단어의 마지막 글자로 이어가는 생존전',min:2,max:20}
 };
 const originalGame=game;
 const originalLoadRooms=loadRooms;
 const originalLeaveConfirmMessage=leaveConfirmMessage;
 const originalKickPlayer=kickPlayer;
 
-function gameCard(type,selectedType,disabled=false){const m=META[type];return `<button type="button" class="gameChoice ${selectedType===type?'selected':''}" data-game-type="${type}" ${disabled?'disabled':''}><span class="gameChoiceIcon">${m.icon}</span><span><strong>${m.name}</strong><small>${m.desc}</small><em>${m.min}명부터</em></span></button>`}
+function gameCard(type,selectedType,disabled=false){const m=META[type];return `<button type="button" class="gameChoice ${selectedType===type?'selected':''}" data-game-type="${type}" ${disabled?'disabled':''}><span class="gameChoiceIcon">${m.icon}</span><span><strong>${m.name}</strong><small>${m.desc}</small><em>${m.min}–${m.max}명 · 봇 포함</em></span></button>`}
 function closeDialog(){const d=$('#gameSwitchDialog');if(!d)return;if(d.open)d.close();else d.classList.add('hidden')}
 function bindPicker(root,s,mode='select'){
- if(!root)return;const host=s.viewerId===s.room.hostId,selectedType=mode==='switch'?s.room.gameType:s.room.selectedGame;
- root.innerHTML=Object.keys(META).map(type=>gameCard(type,selectedType,!host)).join('');
+ if(!root)return;const host=s.viewerId===s.room.hostId,selectedType=mode==='switch'?s.room.gameType:s.room.selectedGame,count=s.room.players.length;
+ root.innerHTML=Object.keys(META).map(type=>gameCard(type,selectedType,!host||count>META[type].max)).join('');
  if(!host)return;
  root.querySelectorAll('[data-game-type]').forEach(b=>b.onclick=async()=>{
   const type=b.dataset.gameType;
@@ -37,13 +37,13 @@ function setMode(type){
  }
 }
 function multiLobby(s){
- show('lobby');const host=s.viewerId===s.room.hostId,type=s.room.selectedGame||'dalmuti',meta=META[type];
- $('#code').textContent=s.room.code;$('#count').textContent=`${s.room.players.length}명 / 최대 ${s.room.maxPlayers}명`;
- $('#lobbyPlayers').innerHTML=s.room.players.map((p,i)=>`<div class="person"><span>${i+1}. ${esc(p.name)}${p.id===s.room.hostId?' 👑':''}${p.bot?' · 봇':''}</span><span>${p.connected?'접속':'끊김'}${host&&p.id!==s.viewerId?` <button class="tiny" data-kick="${p.id}" data-name="${esc(p.name)}">강퇴</button>`:''}</span></div>`).join('');
+ show('lobby');const host=s.viewerId===s.room.hostId,type=s.room.selectedGame||'dalmuti',meta=META[type],count=s.room.players.length;
+ $('#code').textContent=s.room.code;$('#count').textContent=`${count}명 / 최대 ${s.room.maxPlayers}명`;
+ $('#lobbyPlayers').innerHTML=s.room.players.map((p,i)=>`<div class="person"><span>${i+1}. ${esc(p.name)}${p.id===s.room.hostId?' 👑':''}${p.bot?' · 봇':''}</span><span>${p.connected?'접속':'끊김'}${host&&!p.bot&&p.id!==s.viewerId?` <button class="tiny" data-kick="${p.id}" data-name="${esc(p.name)}">강퇴</button>`:''}</span></div>`).join('');
  bindPicker($('#lobbyGamePicker'),s,'select');
  $('#selectedGameName').textContent=meta.name;
- const humans=s.room.players.filter(p=>!p.bot).length,eligible=type==='dalmuti'?s.room.players.length>=4:humans>=2;
- $('#gameRequirement').textContent=type==='dalmuti'?`달무티는 4–8명이 필요합니다. 현재 ${s.room.players.length}명입니다.`:`단어 게임은 사람 2명부터 시작합니다. 현재 사람 ${humans}명입니다.`;
+ const eligible=count>=meta.min&&count<=meta.max;
+ $('#gameRequirement').textContent=type==='dalmuti'?`달무티는 4–8명이 필요합니다. 현재 ${count}명입니다.`:`단어 게임은 사람/봇 합계 2–20명이 필요합니다. 현재 ${count}명입니다.`;
  $('#lobbyRules').innerHTML=rulePanel(s,'lobby');$('#lobbyRules').classList.toggle('gameTypeHidden',type!=='dalmuti');bindRulePanel($('#lobbyRules'));
  $('#start').classList.toggle('hidden',!host);$('#start').disabled=!eligible;$('#start').textContent=`${meta.name} 시작`;bindKickButtons();
 }
@@ -52,7 +52,7 @@ function wordGame(s){
  const g=s.wordGame,host=s.viewerId===s.room.hostId,meta=META[s.room.gameType],cur=g.players.find(p=>p.id===g.currentPlayerId),myTurn=g.status==='playing'&&g.currentPlayerId===s.viewerId;
  $('#handNo').textContent=`${g.turnNumber}턴`;$('#phase').textContent=g.status==='finished'?'게임 종료':meta.name;$('#roomBadge').textContent=s.room.code;
  const winner=g.players.find(p=>p.id===g.winnerId);
- $('#players').innerHTML=g.players.map(p=>`<div class="player wordPlayer ${p.id===g.currentPlayerId?'turn':''} ${p.id===s.viewerId?'me':''} ${p.eliminated?'eliminated':''}" data-player-id="${p.id}"><div class="wordRole">${p.eliminated?'탈락':`점수 ${p.score}`}</div><div class="pname">${esc(p.name)}${p.id===s.viewerId?' (나)':''}</div><div class="pmeta"><span class="lives">${'♥'.repeat(p.lives)}${'♡'.repeat(Math.max(0,3-p.lives))}</span>${p.connected?'':' · 연결 끊김'}</div>${host&&p.id!==s.viewerId&&s.room.players.some(x=>x.id===p.id)?`<button class="tiny" data-kick="${p.id}" data-name="${esc(p.name)}">강퇴</button>`:''}</div>`).join('')+s.room.players.filter(p=>p.waiting).map(p=>`<div class="player waiting"><div class="role">다음 게임 참가</div><div class="pname">${esc(p.name)}${p.bot?' · 봇(단어게임 미참가)':''}</div></div>`).join('');
+ $('#players').innerHTML=g.players.map(p=>`<div class="player wordPlayer ${p.id===g.currentPlayerId?'turn':''} ${p.id===s.viewerId?'me':''} ${p.eliminated?'eliminated':''}" data-player-id="${p.id}"><div class="wordRole">${p.eliminated?'탈락':`점수 ${p.score}`}</div><div class="pname">${esc(p.name)}${p.id===s.viewerId?' (나)':''}${p.bot?' · 봇':''}</div><div class="pmeta"><span class="lives">${'♥'.repeat(p.lives)}${'♡'.repeat(Math.max(0,(p.maxLives||3)-p.lives))}</span>${p.connected?'':' · 연결 끊김'}</div>${host&&!p.bot&&p.id!==s.viewerId&&s.room.players.some(x=>x.id===p.id)?`<button class="tiny" data-kick="${p.id}" data-name="${esc(p.name)}">강퇴</button>`:''}</div>`).join('')+s.room.players.filter(p=>p.waiting).map(p=>`<div class="player waiting"><div class="role">다음 게임 참가</div><div class="pname">${esc(p.name)}${p.bot?' · 봇':''}</div></div>`).join('');
  bindKickButtons();
  const promptLabel=s.room.gameType==='choseong'?'이번 초성':'이어야 할 글자';
  const promptValue=s.room.gameType==='choseong'?g.prompt:(g.lastWord?[...g.lastWord].at(-1):'자유');
