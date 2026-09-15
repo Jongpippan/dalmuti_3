@@ -7,7 +7,7 @@
     "setup:word-db": "node scripts/setup-word-db.js",
     "postinstall": "node scripts/setup-word-db.js --optional",
     "prestart": "node scripts/setup-word-db.js",
-    "start": "node server.js",
+    "start": "node server-bootstrap.js",
     "test": "node test.js"
   },
   "engines": {
