@@ -6,31 +6,52 @@ const DATA_DIR = path.join(ROOT, 'data');
 const TARGET = path.join(DATA_DIR, 'kr_korean.csv');
 const OPTIONAL = process.argv.includes('--optional');
 const FORCE = process.argv.includes('--force');
-const MARKER = '# common-nouns-v1,한국어 학습용 어휘';
-const MIN_WORDS = 1500;
+const MARKER = '# hunspell-modern-standard-nouns-v1,현대 표준어 명사';
+const MIN_WORDS = 20000;
 
 const SOURCES = [
   {
-    name: 'pd-korean-noun-list-for-wordles (jsDelivr)',
-    url: 'https://cdn.jsdelivr.net/npm/pd-korean-noun-list-for-wordles@0.4.0/src/CommonNouns.js'
+    name: 'hunspell-dict-ko (GitHub)',
+    url: 'https://raw.githubusercontent.com/spellcheck-ko/hunspell-dict-ko/master/dict-ko-data.yaml'
   },
   {
-    name: 'pd-korean-noun-list-for-wordles (GitHub)',
-    url: 'https://raw.githubusercontent.com/han-dle/pd-korean-noun-list-for-wordles/main/src/CommonNouns.js'
+    name: 'hunspell-dict-ko (jsDelivr)',
+    url: 'https://cdn.jsdelivr.net/gh/spellcheck-ko/hunspell-dict-ko@master/dict-ko-data.yaml'
   }
 ];
 
-function extractWords(text) {
+function unquoteYamlScalar(value) {
+  const s = String(value || '').trim();
+  if (s.length >= 2 && ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"')))) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
+function extractNouns(text) {
   const words = [];
   const seen = new Set();
-  const re = /'([가-힣]{2,})'/g;
-  let match;
-  while ((match = re.exec(text))) {
-    const word = match[1].normalize('NFC');
+  let pos = '';
+
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const posMatch = line.match(/^- pos:\s*(.+?)\s*$/);
+    if (posMatch) {
+      pos = unquoteYamlScalar(posMatch[1]);
+      continue;
+    }
+
+    if (pos !== '명사') continue;
+    const wordMatch = line.match(/^\s+word:\s*(.+?)\s*$/);
+    if (!wordMatch) continue;
+
+    const word = unquoteYamlScalar(wordMatch[1]).normalize('NFC').trim();
+    // 끝말잇기/초성게임에 맞게 숫자·기호·한 글자 표제어는 제외한다.
+    if (!/^[가-힣]{2,}$/.test(word)) continue;
     if (seen.has(word)) continue;
     seen.add(word);
     words.push(word);
   }
+
   return words;
 }
 
@@ -46,17 +67,19 @@ async function existingIsUsable() {
 
 async function download(source) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30_000);
+  const timer = setTimeout(() => controller.abort(), 45_000);
   try {
     const response = await fetch(source.url, {
       redirect: 'follow',
       signal: controller.signal,
-      headers: { 'User-Agent': 'dalmuti-multigame-common-word-db/2.0' }
+      headers: { 'User-Agent': 'dalmuti-multigame-standard-korean-db/3.0' }
     });
     if (!response.ok) throw Error(`HTTP ${response.status}`);
     const text = await response.text();
-    const words = extractWords(text);
-    if (words.length < MIN_WORDS) throw Error(`일반 어휘를 충분히 읽지 못했습니다. (${words.length.toLocaleString()}개)`);
+    const words = extractNouns(text);
+    if (words.length < MIN_WORDS) {
+      throw Error(`현대 표준어 명사를 충분히 읽지 못했습니다. (${words.length.toLocaleString()}개)`);
+    }
     return words;
   } finally {
     clearTimeout(timer);
@@ -65,7 +88,7 @@ async function download(source) {
 
 async function main() {
   if (!FORCE && await existingIsUsable()) {
-    console.log('[word-db] Common Korean noun DB already exists.');
+    console.log('[word-db] Modern standard Korean noun DB already exists.');
     return;
   }
 
@@ -74,13 +97,13 @@ async function main() {
 
   for (const source of SOURCES) {
     try {
-      console.log(`[word-db] Downloading common Korean nouns from ${source.name}...`);
+      console.log(`[word-db] Downloading modern standard Korean dictionary from ${source.name}...`);
       const words = await download(source);
       const csv = [MARKER, '낱말,품사', ...words.map(word => `${word},명사`), ''].join('\n');
       const temp = `${TARGET}.tmp-${process.pid}`;
       await fsp.writeFile(temp, csv, 'utf8');
       await fsp.rename(temp, TARGET);
-      console.log(`[word-db] Saved ${path.relative(ROOT, TARGET)} (${words.length.toLocaleString()} common words).`);
+      console.log(`[word-db] Saved ${path.relative(ROOT, TARGET)} (${words.length.toLocaleString()} modern standard nouns).`);
       return;
     } catch (error) {
       lastError = error;
@@ -88,11 +111,11 @@ async function main() {
     }
   }
 
-  throw lastError || Error('일반 한국어 단어 목록을 다운로드하지 못했습니다.');
+  throw lastError || Error('현대 표준어 명사 목록을 다운로드하지 못했습니다.');
 }
 
 main().catch(error => {
-  const message = `[word-db] ${error.message}\n[word-db] source: https://github.com/han-dle/pd-korean-noun-list-for-wordles`;
+  const message = `[word-db] ${error.message}\n[word-db] source: https://github.com/spellcheck-ko/hunspell-dict-ko`;
   if (OPTIONAL) {
     console.warn(`${message}\n[word-db] 설치는 계속합니다. 서버 실행 전 npm run setup:word-db 를 실행해 주세요.`);
     process.exitCode = 0;
