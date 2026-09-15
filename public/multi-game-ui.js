@@ -51,6 +51,10 @@ function multiLobby(s){
  $('#start').classList.toggle('hidden',!host);$('#start').disabled=!eligible;$('#start').textContent=`${meta.name} 시작`;bindKickButtons();
 }
 function revealActive(g){return !!g?.reveal&&Date.now()<Number(g.reveal.until||0)}
+function wordHistoryEvents(s,g){
+ const invalid=(s.room.chat||[]).filter(m=>m?.playerId!=='system'&&String(m?.text||'').startsWith('오답 · ')).map(m=>({type:'invalid',playerId:m.playerId,playerName:m.name,word:String(m.text).slice(5).trim(),at:m.at||0}));
+ return [...g.history,...invalid].sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,60);
+}
 function wordGame(s){
  show('game');setMode(s.room.gameType);
  const g=s.wordGame,host=s.viewerId===s.room.hostId,meta=META[s.room.gameType],cur=g.players.find(p=>p.id===g.currentPlayerId),revealing=revealActive(g),myTurn=g.status==='playing'&&g.currentPlayerId===s.viewerId&&!revealing;
@@ -86,13 +90,14 @@ function wordGame(s){
  inp.placeholder=revealing?'정답 공개 중':myTurn?(isChoseong?`${g.prompt} 단어 입력`:(required?`${required}(으)로 시작하는 단어`:'첫 단어 입력')):'내 차례를 기다리는 중';
  if(myTurn&&document.activeElement!==inp)setTimeout(()=>inp.focus(),0);
 
- $('#wordHistory').innerHTML=[...g.history].reverse().map(h=>{
-  if(h.type==='word')return `<div class="wordHistoryItem"><strong>${esc(h.playerName)}</strong><span>${esc(h.word)}</span></div>`;
-  if(h.type==='timeout')return `<div class="wordHistoryItem timeout"><strong>${esc(h.playerName)}</strong><span>시간 초과 · 목숨 ${h.lives}</span></div>`;
-  if(h.type==='round')return `<div class="wordHistoryItem"><strong>${h.roundNumber}라운드</strong><span>${esc(h.prompt)} · ${h.reason==='exhausted'?'남은 단어 없음':'전원 연속 실패'}</span></div>`;
-  if(h.type==='reveal')return `<div class="wordHistoryItem"><strong>정답 공개</strong><span>${esc(h.word)}</span></div>`;
+ $('#wordHistory').innerHTML=wordHistoryEvents(s,g).map(h=>{
+  if(h.type==='word')return `<div class="wordHistoryItem wordOk"><strong>${esc(h.playerName||'플레이어')}</strong><span>정답 · ${esc(h.word)}</span></div>`;
+  if(h.type==='invalid')return `<div class="wordHistoryItem invalid"><strong>${esc(h.playerName||'플레이어')}</strong><span>오답 · ${esc(h.word)}</span></div>`;
+  if(h.type==='timeout')return `<div class="wordHistoryItem timeout"><strong>${esc(h.playerName||'플레이어')}</strong><span>${h.lives>0?`-1 목숨 · 남은 ${h.lives}`:'-1 목숨 · 탈락'}</span></div>`;
+  if(h.type==='round')return `<div class="wordHistoryItem round"><strong>${h.roundNumber}라운드</strong><span>${esc(h.prompt)} · ${h.reason==='exhausted'?'남은 단어 없음':'전원 연속 실패'}</span></div>`;
+  if(h.type==='reveal')return `<div class="wordHistoryItem reveal"><strong>정답 공개</strong><span>${esc(h.word)}</span></div>`;
   return `<div class="wordHistoryItem timeout"><strong>${esc(h.playerName||'플레이어')}</strong><span>게임에서 나감</span></div>`;
- }).join('')||'<div class="wordHistoryEmpty">아직 제출된 단어가 없습니다.</div>';
+ }).join('')||'<div class="wordHistoryEmpty">아직 진행 기록이 없습니다.</div>';
  updateTimer();
 }
 function updateTimer(){
@@ -105,7 +110,11 @@ function updateTimer(){
  const left=Math.max(0,g.turnDeadline-Date.now()),sec=Math.ceil(left/1000),base=Math.max(1,Number(g.baseTurnLimitMs||g.turnLimitMs||15000)),pct=Math.max(0,Math.min(100,left/base*100));
  el.textContent=`${sec}초`;el.classList.toggle('urgent',sec<=5);if(bar)bar.style.width=`${pct}%`;
 }
-async function submitWord(){const inp=$('#wordInput'),word=inp?.value.trim();if(!word)return;await act('send-chat',{message:`시도 · ${word}`});if(await act('submit-word',{word}))inp.value=''}
+async function submitWord(){
+ const inp=$('#wordInput'),word=inp?.value.trim();if(!word)return;
+ const ok=await act('submit-word',{word});
+ if(ok)inp.value='';else await act('send-chat',{message:`오답 · ${word}`});
+}
 async function restartWordGame(){
  if(!state||state.viewerId!==state.room.hostId||!['choseong','wordchain'].includes(state.room.gameType))return;
  const type=state.room.gameType,meta=META[type];
