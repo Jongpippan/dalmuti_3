@@ -61,10 +61,11 @@ function applyChat(){
    const item=byId.get(msg.dataset.chatId);if(!item)return;
    if(item.name==='시스템'&&String(item.text||'').includes('이번 라운드를 쉽니다.')){msg.classList.add('hidden');return}
    const p=info.get(item.playerId);if(!p)return;
-   msg.dataset.chatDecorated='1';msg.classList.add('playerChat');
+   const transformed=!!item.masked,badge=p.rank?`${escapeHtml(p.title)} · ${p.rank}위`:escapeHtml(p.title);
+   const signature=[p.title,p.rank??'',p.portrait,p.color.accent,p.color.bg,item.name,item.text,transformed?'1':'0'].join('|');
+   if(msg.dataset.chatSignature===signature)return;
+   msg.dataset.chatSignature=signature;msg.dataset.chatDecorated='1';msg.classList.add('playerChat');
    msg.style.setProperty('--chat-accent',p.color.accent);msg.style.setProperty('--chat-bg',p.color.bg);
-   const transformed=!!item.masked;
-   const badge=p.rank?`${escapeHtml(p.title)} · ${p.rank}위`:escapeHtml(p.title);
    msg.innerHTML=`${avatarHtml(p.portrait,'',p.color.accent)}<span class="chatText"><b>${escapeHtml(item.name)}</b><span class="chatRank">${badge}</span><span class="chatBody ${transformed?'transformedChat':''}">${escapeHtml(item.text)}</span></span>`
   })
  })
