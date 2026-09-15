@@ -73,12 +73,6 @@ replaceOnce(
 );
 
 replaceOnce(
-  'join activity',
-  "    const r = getRoom(p.roomCode), name = cleanName(p.name), existing = r.players.find(x => x.name.toLowerCase() === name.toLowerCase());",
-  "    const r = getRoom(p.roomCode), name = cleanName(p.name), existing = r.players.find(x => x.name.toLowerCase() === name.toLowerCase());\n    r.lastHumanActivityAt = Date.now();"
-);
-
-replaceOnce(
   'difficulty action',
   "  'start-game': p => {",
   "  'set-word-difficulty': p => {\n    const { r, u } = auth(p);\n    if (u.id !== r.hostId) throw Error('방장만 초성게임 난이도를 변경할 수 있습니다.');\n    r.wordDifficulty = cleanWordDifficulty(p.difficulty);\n    emit(r); return {};\n  },\n  'start-game': p => {"
@@ -87,7 +81,7 @@ replaceOnce(
 replaceOnce(
   'human action activity',
   "    if (req.method === 'POST' && u.pathname === '/api/action') {\n      const p = await body(req), fn = A[p.type];\n      if (!fn) throw Error('알 수 없는 요청입니다.');\n      return json(res, 200, { ok: true, ...fn(p) });\n    }",
-  "    if (req.method === 'POST' && u.pathname === '/api/action') {\n      const p = await body(req), fn = A[p.type];\n      if (!fn) throw Error('알 수 없는 요청입니다.');\n      if (p.type !== 'reconnect-session' && p.roomCode && p.playerId && p.reconnectToken) {\n        try {\n          const activityRoom = rooms.get(cleanCode(p.roomCode));\n          const actor = activityRoom?.players.find(x => x.id === p.playerId && x.token === p.reconnectToken);\n          if (actor && !actor.bot) activityRoom.lastHumanActivityAt = Date.now();\n        } catch {}\n      }\n      return json(res, 200, { ok: true, ...fn(p) });\n    }"
+  "    if (req.method === 'POST' && u.pathname === '/api/action') {\n      const p = await body(req), fn = A[p.type];\n      if (!fn) throw Error('알 수 없는 요청입니다.');\n      if (p.type !== 'reconnect-session' && p.roomCode && p.playerId && p.reconnectToken) {\n        try {\n          const activityRoom = rooms.get(cleanCode(p.roomCode));\n          const actor = activityRoom?.players.find(x => x.id === p.playerId && x.token === p.reconnectToken);\n          if (actor && !actor.bot) activityRoom.lastHumanActivityAt = Date.now();\n        } catch {}\n      }\n      const result = fn(p);\n      if (p.type === 'join-room' && p.roomCode) {\n        try { const joinedRoom = rooms.get(cleanCode(p.roomCode)); if (joinedRoom) joinedRoom.lastHumanActivityAt = Date.now(); } catch {}\n      }\n      return json(res, 200, { ok: true, ...result });\n    }"
 );
 
 replaceOnce(
