@@ -3,6 +3,7 @@ const DIFFICULTY_LABELS={easy:'쉬움',normal:'보통',hard:'어려움'};
 const DIFFICULTY_HELP={easy:'답 후보가 많은 초성 위주',normal:'답 후보가 중간 정도인 초성',hard:'답 후보가 적은 초성 위주'};
 const qs=s=>document.querySelector(s);
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function currentState(){try{return state}catch{return null}}
 
 function difficultyPanelHtml(s,where='lobby'){
  const host=s.viewerId===s.room.hostId,current=s.room.wordDifficulty||'normal';
@@ -59,7 +60,7 @@ function applyWordPlayerAccent(){
  });
 }
 
-function updateAutoRestartText(s=window.state){
+function updateAutoRestartText(s=currentState()){
  if(!s?.wordGame||s.wordGame.status!=='finished'||!s.room.wordAutoRestartAt)return;
  const left=Math.max(0,Number(s.room.wordAutoRestartAt)-Date.now()),sec=Math.ceil(left/1000),el=qs('#wordTurnStatus');
  if(el)el.textContent=`${sec}초 후 같은 게임이 자동으로 다시 시작됩니다.${s.viewerId===s.room.hostId?' · 새로 시작 버튼으로 즉시 시작 가능':''}`;
