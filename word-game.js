@@ -1,14 +1,12 @@
-const KoreanNouns = require('pd-korean-noun-list-for-wordles');
+const fs = require('fs');
+const path = require('path');
 
-const ALL = Array.isArray(KoreanNouns.ALL_NOUNS) ? KoreanNouns.ALL_NOUNS : [];
-const COMMON = Array.isArray(KoreanNouns.COMMON_NOUNS) ? KoreanNouns.COMMON_NOUNS : [];
 const HANGUL_WORD = /^[가-힣]+$/;
 const CHOSEONG = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
-
-const words = [...new Set(ALL.map(normalizeWord).filter(w => w.length >= 2 && HANGUL_WORD.test(w)))];
-const wordSet = new Set(words);
-const promptWords = [...new Set(COMMON.map(normalizeWord).filter(w => w.length === 2 && wordSet.has(w) && HANGUL_WORD.test(w)))];
-const promptPool = promptWords.length ? promptWords : words.filter(w => w.length === 2);
+const DB_PATH = process.env.WORD_DB_PATH
+  ? path.resolve(process.env.WORD_DB_PATH)
+  : path.join(__dirname, 'data', 'kr_korean.csv');
+const MIN_PROMPT_ANSWERS = 8;
 
 function normalizeWord(value) {
   return String(value || '').normalize('NFC').trim().replace(/\s+/g, '');
@@ -21,13 +19,86 @@ function getChoseong(value) {
   }).join('');
 }
 
+function parseCsvLine(line) {
+  const fields = [];
+  let current = '';
+  let quoted = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (quoted && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (ch === ',' && !quoted) {
+      fields.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  fields.push(current);
+  return fields;
+}
+
+function loadDictionary() {
+  if (!fs.existsSync(DB_PATH)) {
+    throw Error(`한국어 단어 DB가 없습니다: ${DB_PATH}\n먼저 npm run setup:word-db 를 실행해 주세요.`);
+  }
+
+  const raw = fs.readFileSync(DB_PATH, 'utf8').replace(/^\uFEFF/, '');
+  const set = new Set();
+  let rows = 0;
+
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line) continue;
+    const [rawWord = '', rawPart = ''] = parseCsvLine(line);
+    const word = normalizeWord(rawWord);
+    const part = String(rawPart || '').trim();
+
+    if (!word || (word === '낱말' && part === '품사')) continue;
+    if (word.length < 2 || !HANGUL_WORD.test(word)) continue;
+    if (part.includes('동사') || part.includes('형용사')) continue;
+
+    set.add(word);
+    rows += 1;
+  }
+
+  if (!set.size) throw Error('한국어 단어 DB에서 사용할 수 있는 단어를 읽지 못했습니다.');
+
+  const promptCounts = new Map();
+  for (const word of set) {
+    if ([...word].length !== 2) continue;
+    const prompt = getChoseong(word);
+    promptCounts.set(prompt, (promptCounts.get(prompt) || 0) + 1);
+  }
+
+  let prompts = [...promptCounts.entries()]
+    .filter(([, count]) => count >= MIN_PROMPT_ANSWERS)
+    .map(([prompt]) => prompt);
+
+  if (!prompts.length) prompts = [...promptCounts.keys()];
+
+  console.log(`[word-db] Loaded ${set.size.toLocaleString()} unique words from korean-word-game/db (${rows.toLocaleString()} accepted rows).`);
+  console.log(`[word-db] Choseong prompt pool: ${prompts.length.toLocaleString()} combinations.`);
+
+  return { set, prompts };
+}
+
+const dictionary = loadDictionary();
+const wordSet = dictionary.set;
+const promptPool = dictionary.prompts;
+
 function randomPrompt(previous = '') {
   if (!promptPool.length) return 'ㅅㄱ';
   for (let i = 0; i < 12; i++) {
-    const next = getChoseong(promptPool[Math.floor(Math.random() * promptPool.length)]);
+    const next = promptPool[Math.floor(Math.random() * promptPool.length)];
     if (next && next !== previous) return next;
   }
-  return getChoseong(promptPool[Math.floor(Math.random() * promptPool.length)]);
+  return promptPool[Math.floor(Math.random() * promptPool.length)];
 }
 
 function createGame(type, roomPlayers, options = {}) {
@@ -42,11 +113,12 @@ function createGame(type, roomPlayers, options = {}) {
     portrait: p.portrait || 'royal',
     seat: i,
     lives,
+    maxLives: lives,
     score: 0,
     eliminated: false,
     connected: p.connected !== false
   }));
-  const game = {
+  return {
     kind: 'word',
     type,
     status: 'playing',
@@ -62,7 +134,6 @@ function createGame(type, roomPlayers, options = {}) {
     winnerId: null,
     turnNumber: 1
   };
-  return game;
 }
 
 function activePlayers(game) {
@@ -105,7 +176,7 @@ function validateCommon(game, word) {
   if (!word) throw Error('단어를 입력해 주세요.');
   if (!HANGUL_WORD.test(word)) throw Error('한글 단어만 입력할 수 있습니다.');
   if (word.length < 2) throw Error('두 글자 이상의 단어를 입력해 주세요.');
-  if (!wordSet.has(word)) throw Error('단어 목록에 없는 단어입니다.');
+  if (!wordSet.has(word)) throw Error('표준국어대사전 단어 목록에 없는 단어입니다.');
   if (game.usedWords.includes(word)) throw Error('이미 나온 단어입니다.');
 }
 
@@ -174,12 +245,14 @@ function publicGame(game, roomPlayers) {
     winnerId: game.winnerId,
     turnNumber: game.turnNumber,
     dictionarySize: wordSet.size,
+    dictionarySource: 'korean-word-game/db · 표준국어대사전',
     players: game.players.map(p => ({
       id: p.id,
       name: p.name,
       portrait: present.get(p.id)?.portrait || p.portrait || 'royal',
       connected: !!present.get(p.id)?.connected,
       lives: p.lives,
+      maxLives: p.maxLives,
       score: p.score,
       eliminated: p.eliminated
     }))
@@ -194,5 +267,6 @@ module.exports = {
   publicGame,
   getChoseong,
   normalizeWord,
-  dictionarySize: wordSet.size
+  dictionarySize: wordSet.size,
+  dictionaryPath: DB_PATH
 };
